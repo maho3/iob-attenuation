@@ -172,3 +172,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+symbolic_regression/data
+symbolic_regression/fits
