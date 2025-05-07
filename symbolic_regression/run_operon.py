@@ -143,9 +143,9 @@ def run_operon(ini_file):
 
 
 if __name__ == "__main__":
-    run_operon('conf/iob_0.ini')
-    # parser = argparse.ArgumentParser(description="Run operon with a specified config file.")
-    # parser.add_argument("config_path", help="Path to the configuration file.")
-    # args = parser.parse_args()
-    # run_operon(args.config_path)
+    # run_operon('conf/iob_0.ini')
+    parser = argparse.ArgumentParser(description="Run operon with a specified config file.")
+    parser.add_argument("config_path", help="Path to the configuration file.")
+    args = parser.parse_args()
+    run_operon(args.config_path)
 
