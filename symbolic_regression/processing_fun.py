@@ -9,6 +9,7 @@ import csv
 from os.path import join as pjoin
 from tqdm import tqdm
 import scipy.special
+from matplotlib.lines import Line2D
 
 from utils import OperonArgs
 
@@ -147,6 +148,11 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     fname = f'{out_dir}/{run_name}_fun.csv'
     df = pd.read_csv(fname, delimiter=';')
     
+    if args.fit_log:
+        print('\nTarget: log10A')
+    else:
+        print('\nTarget: A')
+    
     if ilen is None:
         eq_idx = -1
     else:
@@ -213,6 +219,10 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     ax.set_xlabel('Model Length')
     ax.set_ylabel('Root Mean Squared Error')
     ax.legend(loc='upper right')
+    if args.fit_log:
+        ax.set_title('Fit to log10A')
+    else:
+        ax.set_title('Fit to A')
     
     fig.align_labels()
     fig.tight_layout()
@@ -220,7 +230,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     return fig, ax
 
 
-def prediction_plots(ini_file, ilen=None):
+def prediction_plots(ini_file, ilen=None, plot_frac_error=True):
     """
     Show the difference between the truth and predicted
     
@@ -228,6 +238,8 @@ def prediction_plots(ini_file, ilen=None):
         :ini_file (str): The path to the ini file containing the run information
         :ilen (int, default=None): The length of the equation to highlight. If None,
             then this is taken to be the final equation
+        :plot_frac_error (bool, default=True): Whether to plot the fractional error
+            (True) or absolute error (False)
             
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing plot
@@ -240,6 +252,11 @@ def prediction_plots(ini_file, ilen=None):
     out_dir = pjoin(args.fit_dir, run_name)
     fname = f'{out_dir}/{run_name}_fun.csv'
     df = pd.read_csv(fname, delimiter=';')
+    
+    if args.fit_log:
+        print('\nTarget: log10A')
+    else:
+        print('\nTarget: A')
     
     if ilen is None:
         eq_idx = -1
@@ -263,8 +280,9 @@ def prediction_plots(ini_file, ilen=None):
         rmse = np.sqrt(np.mean((ytrue - ypred) ** 2))
         print(f'\nRMSE {name}: %.3e'%rmse)
         
-        ypred = np.exp(ypred)
-        ytrue = np.exp(ytrue)
+        if args.fit_log:
+            ypred = 10. ** ypred
+            ytrue = 10. ** ytrue
 
         fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
         with open(fname, 'r') as f:
@@ -273,19 +291,22 @@ def prediction_plots(ini_file, ilen=None):
 
         all_frac_res = [None] * getattr(args, f'n{name}')
         for j in range(getattr(args, f'n{name}')):
-            all_frac_res[j] = ypred[j*len(lam):(j+1)*len(lam)] / ytrue[j*len(lam):(j+1)*len(lam)]
+            if plot_frac_error:
+                all_frac_res[j] = ypred[j*len(lam):(j+1)*len(lam)] / ytrue[j*len(lam):(j+1)*len(lam)] - 1
+            else:
+                all_frac_res[j] = ypred[j*len(lam):(j+1)*len(lam)] - ytrue[j*len(lam):(j+1)*len(lam)]
         all_frac_res = np.array(all_frac_res)
         all_perc = [34+13.5+2.35, 34+13.5, 34]
         all_perc = all_perc[1:]
         for j, delta in enumerate(all_perc):
-            low = np.percentile(all_frac_res, 50 - delta, axis=0) - 1
-            high = np.percentile(all_frac_res, 50 + delta, axis=0) - 1
+            low = np.percentile(all_frac_res, 50 - delta, axis=0) 
+            high = np.percentile(all_frac_res, 50 + delta, axis=0)
             print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
             axs[i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
-        axs[i].plot(lam, np.median(all_frac_res, axis=0) - 1, color='k')
-        rmse = np.sqrt(np.mean((all_frac_res - 1) ** 2))
+        axs[i].plot(lam, np.median(all_frac_res, axis=0), color='k')
+        rmse = np.sqrt(np.mean((all_frac_res) ** 2))
         print("\t\tRMSE:", rmse)
-        rmae = np.mean(np.abs(all_frac_res - 1))
+        rmae = np.mean(np.abs(all_frac_res))
         print("\t\tRMAE:", rmae)
 
         axs[i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
@@ -296,8 +317,88 @@ def prediction_plots(ini_file, ilen=None):
 
         axs[0].set_title('Training')
         axs[1].set_title('Validation')
-        axs[0].set_ylabel(r'Fractional Error on $A$')
+        if plot_frac_error:
+            axs[0].set_ylabel(r'Fractional Error on $A$')
+        else:
+            axs[0].set_ylabel(r'Absolute Error on $A$')
     
+    fig.align_labels()
+    fig.tight_layout()
+    
+    return fig, axs
+
+
+def plot_example(ini_file, ilen=None, nexamples=5):
+    """
+    Plot an example curve
+    
+    Args:
+        :ini_file (str): The path to the ini file containing the run information
+        :ilen (int, default=None): The length of the equation to highlight. If None,
+            then this is taken to be the final equation
+        :nexamples (int, default=5): Number of examples to plot
+            
+    Returns:
+        :fig (matplotlib.figure.Figure): Figure containing plot
+        :axs (np.ndarray[matplotlib.pyplot.axis]): Axes of fig containing the plot
+    """
+    
+    args = OperonArgs(ini_file)
+    
+    run_name = f'{args.in_param}_{str(args.version_num)}'
+    out_dir = pjoin(args.fit_dir, run_name)
+    fname = f'{out_dir}/{run_name}_fun.csv'
+    df = pd.read_csv(fname, delimiter=';')
+    
+    if args.fit_log:
+        print('\nTarget: log10A')
+    else:
+        print('\nTarget: A')
+    
+    if ilen is None:
+        eq_idx = -1
+    else:
+        eq_idx = list(df['Length']).index(ilen)
+    length = list(df['Length'])[eq_idx]
+    
+    cmap = plt.get_cmap('Set1')
+    rcParams['font.size'] = 16
+    rcParams["text.usetex"] = True
+        
+    fig, axs = plt.subplots(1, 2, figsize=(15,6), sharex=True)
+
+    for i, name in enumerate(['train', 'val']):
+
+        fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
+        data = np.loadtxt(fname)
+        ytrue = data[:,-2]
+        ypred = data[:,-1]
+        
+        if args.fit_log:
+            ytrue = 10. ** ytrue
+            ypred = 10. ** ypred
+        
+        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+        with open(fname, 'r') as f:
+            header = f.readline().split()
+        lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
+        
+        for j in range(nexamples):
+            c = f'C{j}'
+            axs[i].plot(lam, ytrue[j*len(lam):(j+1)*len(lam)], color=c, ls='--')
+            axs[i].plot(lam, ypred[j*len(lam):(j+1)*len(lam)], color=c)
+
+        axs[i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
+        axs[i].set_ylabel(r'$A$')
+        axs[i].set_ylim(0, None)
+                
+    custom_lines = [Line2D([0], [0], color='k', lw=2, ls='--'),
+                Line2D([0], [0], color='k', lw=2, ls='-')]
+    for ax in axs:
+        ax.legend(custom_lines, ['True', 'Predicted'])
+    axs[0].set_title('Training')
+    axs[1].set_title('Validation')
+        
     fig.align_labels()
     fig.tight_layout()
     

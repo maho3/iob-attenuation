@@ -1,10 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=iob_0
+#SBATCH --job-name=iob_7
 #SBATCH --nodes=1
-#SBATCH --exclusive
-#SBATCH --ntasks=128
-#SBATCH --ntasks-per-node=128
-#SBATCH --time=1:10:00
+# # SBATCH --exclusive
+# #SBATCH --ntasks=128
+# #SBATCH --ntasks-per-node=128
+#SBATCH --ntasks=100
+#SBATCH --time=3:10:00
 #SBATCH --partition=pscomp
 #SBATCH --output=/data101/bartlett/symbolic_regression/iob-attenuation/out_files/iob_attenuation_fit_%j.out
 #SBATCH --error=/data101/bartlett/symbolic_regression/iob-attenuation/out_files/iob_attenuation_fit_%j.err
@@ -25,7 +26,7 @@ set -e
 
 cd
 cd symbolic_regression/iob-attenuation/symbolic_regression
-python3 run_operon.py conf/iob_0.ini
+python3 run_operon.py conf/iob_7.ini
 
 conda deactivate
 

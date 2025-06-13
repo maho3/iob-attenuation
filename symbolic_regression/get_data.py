@@ -2,16 +2,19 @@ import numpy as np
 from utils import OperonArgs
 from os.path import join as pjoin
 import os
+import argparse
 
-def format_output(mydata, wavelength, ipar, iwave, A_logged):
+def format_output(mydata, wavelength, ipar, iwave, A_logged, fit_log):
 
     n = mydata.shape[0]
 
     # Flatten attentuation curve
     data = mydata[:,np.array(iwave, dtype=int)]
     data = data.ravel()
-    if not A_logged:
+    if (fit_log) and (not A_logged):
         data = np.log10(data)
+    elif (not fit_log) and (A_logged):
+        data = 10. ** data
 
     # Repeat the parameter values
     samples = np.repeat(mydata[:,np.array(ipar)], len(wavelength), axis=0)
@@ -97,17 +100,26 @@ def get_data(ini_file):
     # Add to ipar the other parts of the header we need
     ipar = [header.index(h) for h in ['galaxy_id', 'los']] + ipar
     
-    new_header = ' '.join([header[i] for i in ipar] + ['lam', 'log10A'])
+    names = [header[i] for i in ipar] + ['lam']
+    if args.fit_log:
+        names += ['log10A']
+    else:
+        names += ['A']
+    new_header = ' '.join(names)
 
     dirname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}')
     os.makedirs(dirname, exist_ok=True)
 
     for name, mydata in zip(['train', 'val', 'test'], [train_data, val_data, test_data]):
-        output = format_output(mydata, wavelength, ipar, iwave, A_logged)
+        output = format_output(mydata, wavelength, ipar, iwave, A_logged, args.fit_log)
         outname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
         np.savetxt(outname, output, header=new_header, comments='')
 
     return 
 
 if __name__ == "__main__":
-    get_data('conf/iob_0.ini')
+    get_data('conf/iob_7.ini')
+    parser = argparse.ArgumentParser(description="Get data with a specified config file.")
+    parser.add_argument("config_path", help="Path to the configuration file.")
+    args = parser.parse_args()
+    get_data(args.config_path)

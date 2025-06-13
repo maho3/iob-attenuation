@@ -50,6 +50,8 @@ class OperonArgs(object):
         self.nval = int(config['data']['nval'])
         self.ntest = int(config['data']['ntest'])
         self.lambda_V = float(config['data']['lambda_v'])
+        self.npar = int(config['data']['npar'])
+        self.fit_log = bool(config['data']['fit_log'].strip().lower() == 'true')
         
         self.allowed_symbols = config['operon']['allowed_symbols']
         self.epsilon = float(config['operon']['epsilon'])

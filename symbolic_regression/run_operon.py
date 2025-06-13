@@ -44,8 +44,15 @@ def run_operon(ini_file):
     yval = data[:,-1]
 
     par_mask = np.ones(X.shape[1], dtype=bool)
+    par_mask[args.npar:-1] = False
     print('Target:', names[-1])
     print('Fitting using parameters:', [names[p] for p in range(len(names)-1) if par_mask[p]])
+    
+    # Check arguments
+    if args.fit_log:
+        assert names[-1] == 'log10A', "Mismatch between config file target and that of file"
+    else:
+        assert names[-1] == 'A', "Mismatch between config file target and that of file"
 
     assert names == val_names, 'Training and validation data have different names'
 
@@ -143,7 +150,6 @@ def run_operon(ini_file):
 
 
 if __name__ == "__main__":
-    # run_operon('conf/iob_0.ini')
     parser = argparse.ArgumentParser(description="Run operon with a specified config file.")
     parser.add_argument("config_path", help="Path to the configuration file.")
     args = parser.parse_args()
