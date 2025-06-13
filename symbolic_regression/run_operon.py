@@ -46,7 +46,8 @@ def run_operon(ini_file):
     par_mask = np.ones(X.shape[1], dtype=bool)
     par_mask[args.npar:-1] = False
     print('Target:', names[-1])
-    print('Fitting using parameters:', [names[p] for p in range(len(names)-1) if par_mask[p]])
+    use_names = [names[p] for p in range(len(names)-1) if par_mask[p]]
+    print('Fitting using parameters:', use_names)
     
     # Check arguments
     if args.fit_log:
@@ -105,7 +106,7 @@ def run_operon(ini_file):
     # File for names of parameters
     with open(f'{out_dir}/{run_name}_names.txt', 'w') as f:
         writer = csv.writer(f, delimiter='\t')
-        writer.writerow(names)
+        writer.writerow(use_names)
 
     res = [(s['tree'],  s['model']) for s in reg.pareto_front_]
 
