@@ -176,6 +176,9 @@ def main():
     fname = '../data/gal_los_iobcomp_attcurve_galprop.dat'
     ids, att_groups, attenuation_cols, lam_arr = load_data(fname)
 
+    # For testing purposes, we can select a subset of galaxies
+    ids = ids[:100]
+
     if rank == 0:
         print('Number of galaxies:', len(ids), flush=True)
         print('Number of galaxies per rank:', len(ids) // size, flush=True)
