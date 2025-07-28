@@ -52,6 +52,8 @@ class OperonArgs(object):
         self.lambda_V = float(config['data']['lambda_v'])
         self.npar = int(config['data']['npar'])
         self.fit_log = bool(config['data']['fit_log'].strip().lower() == 'true')
+        self.lam_max = float(config['data']['lam_max'])
+        self.lam_min = float(config['data']['lam_min'])
         
         self.allowed_symbols = config['operon']['allowed_symbols']
         self.epsilon = float(config['operon']['epsilon'])
