@@ -23,4 +23,3 @@ Plot ratio of fluxes - not just the attenuation curve
 # To Do
 
 - Add the ratio of fluxes plot to processing_fun and notebook
-- Run fits for all galaxies using the literature models

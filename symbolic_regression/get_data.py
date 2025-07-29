@@ -107,6 +107,11 @@ def get_data(ini_file):
         outname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
         np.savetxt(outname, output_array, header=header, comments='')
 
+        # Now save the galaxy ids and los in case we need them later
+        output_array = data_set[['galaxy_id', 'los']].values
+        outname = pjoin(dirname, f'{args.in_param}_{name}_galaxy_ids_los.txt')
+        np.savetxt(outname, output_array, fmt='%d', header='\t'.join(['galaxy_id', 'los']), delimiter='\t')
+
     return 
 
 if __name__ == "__main__":

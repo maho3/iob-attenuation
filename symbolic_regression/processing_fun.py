@@ -12,6 +12,9 @@ from matplotlib.lines import Line2D
 import re
 
 from utils import OperonArgs
+import sys
+sys.path.insert(0, '../literature_fits')
+from fit_literature import load_data, find_nearest
 
 def split_by_punctuation(s):
     """
@@ -354,6 +357,10 @@ def plot_example(ini_file, ilen=None, nexamples=5):
     out_dir = pjoin(args.fit_dir, run_name)
     fname = f'{out_dir}/{run_name}_fun.csv'
     df = pd.read_csv(fname, delimiter=';')
+
+    ids, att_groups, attenuation_cols, lam_arr = load_data(args.input_file) # try properties_file instead of input_file
+    v_index = find_nearest(lam_arr, args.lambda_V)
+    lv_key = attenuation_cols[v_index]
     
     if args.fit_log:
         print('\nTarget: log10A')
@@ -366,11 +373,10 @@ def plot_example(ini_file, ilen=None, nexamples=5):
         eq_idx = list(df['Length']).index(ilen)
     length = list(df['Length'])[eq_idx]
     
-    cmap = plt.get_cmap('Set1')
     rcParams['font.size'] = 16
     rcParams["text.usetex"] = True
         
-    fig, axs = plt.subplots(1, 2, figsize=(15,6), sharex=True)
+    fig, axs = plt.subplots(3, 2, figsize=(15,9), sharex=True)
 
     for i, name in enumerate(['train', 'val']):
 
@@ -382,27 +388,54 @@ def plot_example(ini_file, ilen=None, nexamples=5):
         if args.fit_log:
             ytrue = 10. ** ytrue
             ypred = 10. ** ypred
+
+        # Get the galaxy ids and the los
+        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_{name}_galaxy_ids_los.txt')
+        all_gal_id, all_los = np.loadtxt(fname, dtype=float, unpack=True, skiprows=1)
         
         fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
         with open(fname, 'r') as f:
             header = f.readline().split()
         lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
         
+        # ytrue here is A
         for j in range(nexamples):
             c = f'C{j}'
-            axs[i].plot(lam, ytrue[j*len(lam):(j+1)*len(lam)], color=c, ls='--')
-            axs[i].plot(lam, ypred[j*len(lam):(j+1)*len(lam)], color=c)
+            t = ytrue[j*len(lam):(j+1)*len(lam)]
+            p = ypred[j*len(lam):(j+1)*len(lam)]
+            axs[0,i].plot(lam, t, color=c, ls='--')
+            axs[0,i].plot(lam, p, color=c)
+            axs[1,i].plot(lam, t - p, color=c)
 
-        axs[i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
-        axs[i].set_ylabel(r'$A$')
-        axs[i].set_ylim(0, None)
+            # Get A_V for this galaxy and los
+            # Use A_lambda = -2.5 log (F_obs/F_int) to get dF/F
+            gal_id = all_gal_id[j]
+            los = all_los[j]
+            group = att_groups.get_group(gal_id)
+            if not los in group['los'].values:
+                print(f'Warning: LoS {los} not found in group for galaxy {gal_id}. Available LoS:')
+                print(f'\t{group["los"].values}')
+                continue
+            row = group[group['los'].values == los]
+            A_star = row[lv_key].values[0]
+            dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
+            axs[2,i].plot(lam, dF_F, color=c)
+
+        axs[1,i].axhline(0, color='k', ls='--', lw=2)
+        axs[2,i].axhline(0, color='k', ls='--', lw=2)
+        axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
+        axs[0,i].set_ylim(0, None)
+
+    axs[0,0].set_ylabel(r'$A$')
+    axs[1,0].set_ylabel(r'$A - A_{\rm pred}$')
+    axs[2,0].set_ylabel(r'$\Delta F/F$')
                 
     custom_lines = [Line2D([0], [0], color='k', lw=2, ls='--'),
                 Line2D([0], [0], color='k', lw=2, ls='-')]
-    for ax in axs:
+    for ax in axs[0]:
         ax.legend(custom_lines, ['True', 'Predicted'])
-    axs[0].set_title('Training')
-    axs[1].set_title('Validation')
+    axs[0,0].set_title('Training')
+    axs[0,1].set_title('Validation')
         
     fig.align_labels()
     fig.tight_layout()
