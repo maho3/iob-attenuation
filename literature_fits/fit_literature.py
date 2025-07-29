@@ -49,8 +49,9 @@ def run_fit(fun, x, y, bounds=None, all_p0=None):
         try:
             with np.errstate(over='raise', invalid='raise'):
                 ypred = fun(x, *p)
-            residuals = y - ypred
-            return np.sum(residuals**2)
+                residuals = y - ypred
+                mse = np.sum(residuals**2)
+            return mse
         except (RuntimeWarning, FloatingPointError):
             return 1e30 # Return a large error if the fit fails
 
@@ -128,8 +129,11 @@ def optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, do_plot=False):
         [1.0, 1.0, 1.0, 1.0],  # Generic initial guess
     ]
 
-    # 4 parameter fit
     m = lam_cut>0.12
+    if len(m) != len(Alam_Av_arr_cut):
+        print(f"Warning: Mismatch in length of lam_cut and Alam_Av_arr_cut for galaxy {gal_id}, LoS {los}. {len(m)} vs {len(Alam_Av_arr_cut)}", flush=True)
+
+    # 4 parameter fit
     try:
         popt_4par, success_4par = run_fit(Li_08_fit_noratio, lam_cut[m], Alam_Av_arr_cut[m], 
                             bounds=([-np.inf,-np.inf,-np.inf,0],[np.inf,np.inf,np.inf,1.]),
@@ -146,12 +150,12 @@ def optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, do_plot=False):
 
     # 2 parameter fit
     try:
-        popt_2par, success_2par = run_fit(Att_Curve_2param, 1e4*lam_cut, Alam_Av_arr_cut, 
+        popt_2par, success_2par = run_fit(Att_Curve_2param, 1e4*lam_cut[m], Alam_Av_arr_cut[m], 
                             bounds = ([-np.inf,-np.inf],[np.inf,np.inf]))
-        fit_nb = Att_Curve_2param(1e4*lam_cut,B=popt_2par[0],delta=popt_2par[1])
+        fit_nb = Att_Curve_2param(1e4*lam_cut[m],B=popt_2par[0],delta=popt_2par[1])
         if do_plot:
-            ax.plot(lam_cut*1e4,fit_nb,ls='-',lw=4., alpha=0.2, label='2-parameter fit')
-        rmse_2par = np.sqrt(np.mean((Alam_Av_arr_cut - fit_nb)**2))
+            ax.plot(lam_cut[m]*1e4,fit_nb,ls='-',lw=4., alpha=0.2, label='2-parameter fit')
+        rmse_2par = np.sqrt(np.mean((Alam_Av_arr_cut[m] - fit_nb)**2))
     except RuntimeError as e:
         print(f"Galaxy ID: {gal_id}, LoS: {los}, Fit failed with error: {e}")
         popt_2par = [None, None]   
@@ -176,9 +180,6 @@ def main():
     fname = '../data/gal_los_iobcomp_attcurve_galprop.dat'
     ids, att_groups, attenuation_cols, lam_arr = load_data(fname)
 
-    # For testing purposes, we can select a subset of galaxies
-    ids = ids[:100]
-
     if rank == 0:
         print('Number of galaxies:', len(ids), flush=True)
         print('Number of galaxies per rank:', len(ids) // size, flush=True)
@@ -195,7 +196,7 @@ def main():
     for gal_id in tqdm(ids[start_idx:end_idx], desc="Processing galaxies", disable=(rank != 0)):
         group = att_groups.get_group(gal_id)
         for los in group['los'].values:
-            row = group[group['los'] == los]
+            row = group[group['los'] == los].iloc[0] # occasionally multiple rows for same galaxy and los so pick first
             Alam_arr_cut = row[attenuation_cols].values.flatten()
             popt_2par, popt_4par, rmse_2par, rmse_4par, success_2par, success_4par = optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, do_plot=False)
             local_results.append((gal_id, los, popt_2par, popt_4par, rmse_2par, rmse_4par, success_2par, success_4par))
