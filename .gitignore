@@ -177,3 +177,5 @@ symbolic_regression/data
 symbolic_regression/fits
 data/attenuation_with_IDs_and_PCs.txt
 data/iob_codes_plus_Acurve_with_ID_LOS.txt
+*.out
+*.sh.sh

@@ -19,3 +19,9 @@ Simple and pretty!
 
 Plot ratio of fluxes - not just the attenuation curve
 - This is what Laura did in her paper
+
+# To Do
+
+- Add the ratio of fluxes plot to processing_fun and notebook
+- Process equation to only include x dependence
+- Run fits for all galaxies using the literature models

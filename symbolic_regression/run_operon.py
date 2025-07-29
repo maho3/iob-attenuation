@@ -32,21 +32,19 @@ def run_operon(ini_file):
     fname_val = pjoin(dirname, f'{args.in_param}_val_data.txt')
     
     with open(fname_train, 'r') as f:
-        names = f.readline().strip().split()[2:]
+        names = f.readline().strip().split()
     data = np.loadtxt(fname_train, skiprows=1)
-    X = data[:,2:-1]
+    X = data[:,:-1]
     y = data[:,-1]
 
     with open(fname_val, 'r') as f:
-        val_names = f.readline().strip().split()[2:]
+        val_names = f.readline().strip().split()
     data = np.loadtxt(fname_val, skiprows=1)
-    Xval = data[:,2:-1]
+    Xval = data[:,:-1]
     yval = data[:,-1]
 
-    par_mask = np.ones(X.shape[1], dtype=bool)
-    par_mask[args.npar:-1] = False
+    use_names = names[:-1]
     print('Target:', names[-1])
-    use_names = [names[p] for p in range(len(names)-1) if par_mask[p]]
     print('Fitting using parameters:', use_names)
     
     # Check arguments
@@ -60,7 +58,7 @@ def run_operon(ini_file):
     reg = SymbolicRegressor(
             allowed_symbols=args.allowed_symbols,
             offspring_generator='basic',
-            optimizer_iterations=1000,
+            optimizer_iterations=10,
             max_length=args.max_length,
             initialization_method='btc',
             n_threads=multiprocessing.cpu_count(),
@@ -70,12 +68,12 @@ def run_operon(ini_file):
             reinserter='keep-best',
             max_evaluations=args.max_evaluations,
             symbolic_mode=False,
-            time_limit=args.time_limit,
+            max_time=args.time_limit,
             generations=args.generations,
             )
 
     print('Fitting')
-    reg.fit(X[:,par_mask], y)
+    reg.fit(X, y)
     print(reg.get_model_string(reg.model_, 2))
     print(reg.stats_)
 
@@ -115,7 +113,7 @@ def run_operon(ini_file):
         writer.writerow(["Equation", "Length", "R2_train", "MSE_train", "R2_val", "MSE_val"])
         for model, model_str in res:
 
-            y_pred_train = reg.evaluate_model(model, X[:,par_mask])
+            y_pred_train = reg.evaluate_model(model, np.asfortranarray(X))
             try:
                 mse_train = mse(y, y_pred_train)
             except:
@@ -125,7 +123,7 @@ def run_operon(ini_file):
             except:
                 r2_train = np.nan
 
-            y_pred_val = reg.evaluate_model(model, Xval[:,par_mask])
+            y_pred_val = reg.evaluate_model(model, np.asfortranarray(Xval))
             try:
                 mse_val = mse(yval, y_pred_val)
             except:

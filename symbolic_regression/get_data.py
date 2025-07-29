@@ -21,16 +21,16 @@ def get_data(ini_file):
     # Get rid of "bad" rows
 
     # Check lambda_V from the file is as expected
-    if f'logA_{int(args.lambda_V)}A' in data.keys():
-        assert np.all(data[f'logA_{int(args.lambda_V)}A'] == 0)
+    if f'logA_{int(args.lambda_V*1e4)}A' in data.keys():
+        assert np.all(data[f'logA_{int(args.lambda_V*1e4)}A'] == 0)
         attenuation_cols = [col for col in data.columns if re.match(r'logA_\d+A', col)]
-    elif f'A_{int(args.lambda_V)}A' in data.keys():
-        assert np.all(data[f'A_{int(args.lambda_V)}A'] == 1)
+    elif f'A_{int(args.lambda_V*1e4)}A' in data.keys():
+        assert np.all(data[f'A_{int(args.lambda_V*1e4)}A'] == 1)
         attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
     else:
         raise ValueError("Column with lambda_V not found in input file")
 
-    # Extract the wavelength in angstroms and convert to microns
+    # Extract the wavelength in angstroms
     # Mask these to range [lam_min, lam_max]
     lam_arr = np.array([int(re.search(r'_(\d+)A', col).group(1)) / 1e4 for col in attenuation_cols])
     sort_idx = np.argsort(lam_arr)
