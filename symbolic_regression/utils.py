@@ -40,7 +40,6 @@ class OperonArgs(object):
         config.read(ini_file)
         
         self.input_file = config['system']['input_file']
-        self.properties_file = config['system']['properties_file']
         self.data_dir = config['system']['data_dir']
         self.fit_dir = config['system']['fit_dir']
         self.version_num = int(config['system']['version_num'])

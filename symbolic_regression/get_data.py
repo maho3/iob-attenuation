@@ -18,15 +18,21 @@ def get_data(ini_file):
     data = pd.read_csv(args.input_file, sep='\t',)
     print(data.head())
 
-    # Get rid of "bad" rows
-
-    # Check lambda_V from the file is as expected
+    # Get attenuation column names
     if f'logA_{int(args.lambda_V*1e4)}A' in data.keys():
-        assert np.all(data[f'logA_{int(args.lambda_V*1e4)}A'] == 0)
         attenuation_cols = [col for col in data.columns if re.match(r'logA_\d+A', col)]
+        if not np.all(data[f'logA_{int(args.lambda_V*1e4)}A'] == 0):
+            print('\tWarning: logA_V column is not all zeros: normalising data')
+            for col in attenuation_cols:
+                data[col] = data[col] - data[f'logA_{int(args.lambda_V*1e4)}A']
+            assert np.all(data[f'logA_{int(args.lambda_V*1e4)}A'] == 0), "Normalisation failed"
     elif f'A_{int(args.lambda_V*1e4)}A' in data.keys():
-        assert np.all(data[f'A_{int(args.lambda_V*1e4)}A'] == 1)
         attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
+        if not np.all(data[f'A_{int(args.lambda_V*1e4)}A'] == 1):
+            print('\tWarning: A_V column is not all ones: normalising data')
+            for col in attenuation_cols:
+                data[col] = data[col] / data[f'A_{int(args.lambda_V*1e4)}A']
+            assert np.all(data[f'A_{int(args.lambda_V*1e4)}A'] == 1), "Normalisation failed"
     else:
         raise ValueError("Column with lambda_V not found in input file")
 

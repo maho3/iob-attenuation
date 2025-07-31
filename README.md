@@ -22,4 +22,4 @@ Plot ratio of fluxes - not just the attenuation curve
 
 # To Do
 
-- Add the ratio of fluxes plot to processing_fun and notebook
+- Try two validations sets - one with large AV and another with low AV. For 2- and 4- parameter fits, these two different significantly in performance, so it would be interesting to see whether the new fits have similar performance for both. Cut is around A_V > 0.7 for high and for low A_V < 0.2

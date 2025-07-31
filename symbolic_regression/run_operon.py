@@ -8,6 +8,7 @@ from pyoperon import MSE
 from utils import OperonArgs
 from os.path import join as pjoin
 import argparse
+import pandas as pd
 
 def run_operon(ini_file):
     """
@@ -30,18 +31,55 @@ def run_operon(ini_file):
     dirname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}')
     fname_train = pjoin(dirname, f'{args.in_param}_train_data.txt')
     fname_val = pjoin(dirname, f'{args.in_param}_val_data.txt')
-    
+    fname_train_id = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_galaxy_ids_los.txt')
+    fname_val_id = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_val_galaxy_ids_los.txt')
+
     with open(fname_train, 'r') as f:
         names = f.readline().strip().split()
     data = np.loadtxt(fname_train, skiprows=1)
     X = data[:,:-1]
     y = data[:,-1]
+    train_id, train_los = np.loadtxt(fname_train_id, dtype=float, unpack=True, skiprows=1)
 
     with open(fname_val, 'r') as f:
         val_names = f.readline().strip().split()
     data = np.loadtxt(fname_val, skiprows=1)
     Xval = data[:,:-1]
     yval = data[:,-1]
+    val_id, val_los = np.loadtxt(fname_val_id, dtype=float, unpack=True, skiprows=1)
+
+    # Get the normalisation of the curves
+    data = pd.read_csv(args.input_file, sep='\t',)
+    if f'logA_{int(args.lambda_V*1e4)}A' in data.keys():
+        lv_key = f'logA_{int(args.lambda_V*1e4)}A'
+    elif f'A_{int(args.lambda_V*1e4)}A' in data.keys():
+        lv_key = f'A_{int(args.lambda_V*1e4)}A'
+    else:
+        raise ValueError("Column with lambda_V not found in input file")
+    
+    # Get A_v for training and validation sets so we can calculate dF/F after fitting
+    data['_key'] = list(zip(data['galaxy_id'], data['los']))
+    data = data.drop_duplicates('_key', keep='first')
+    target_pairs = list(zip(train_id, train_los))
+    filtered = data[data['_key'].isin(target_pairs)]
+    ordered_train = filtered.set_index('_key').loc[target_pairs].reset_index(drop=True)
+    train_Av = ordered_train[lv_key].values
+    target_pairs = list(zip(val_id, val_los))
+    filtered = data[data['_key'].isin(target_pairs)]
+    ordered_val = filtered.set_index('_key').loc[target_pairs].reset_index(drop=True)
+    val_Av = ordered_val[lv_key].values
+    if 'logA' in lv_key:
+        train_Av = 10 ** train_Av
+        val_Av = 10 ** val_Av
+    if np.all(train_Av == 1) or np.all(val_Av == 1):
+        print('Warning: Av is 1 everywhere. Will not calculate dF/F.')
+        do_dF_F = False
+    else:
+        do_dF_F = True
+    train_Av = np.repeat(train_Av, X.shape[0] // train_Av.shape[0], axis=0)
+    val_Av = np.repeat(val_Av, Xval.shape[0] // val_Av.shape[0], axis=0)
+    assert train_Av.shape[0] == X.shape[0], "Mismatch in training Av and X shape"
+    assert val_Av.shape[0] == Xval.shape[0], "Mismatch in validation Av and X shape"
 
     use_names = names[:-1]
     print('Target:', names[-1])
@@ -110,10 +148,23 @@ def run_operon(ini_file):
 
     with open(outname, "w") as f:
         writer = csv.writer(f, delimiter=';')
-        writer.writerow(["Equation", "Length", "R2_train", "MSE_train", "R2_val", "MSE_val"])
+        writer.writerow(["Equation", "Length", "R2_train", "MSE_train", "MedAE_train_F", "R2_val", "MSE_val", "MedAE_val_F"])
         for model, model_str in res:
 
             y_pred_train = reg.evaluate_model(model, np.asfortranarray(X))
+
+            # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
+            if do_dF_F:
+                if args.fit_log:
+                    A_pred = 10 ** y_pred_train
+                    A_true = 10 ** y
+                else:
+                    A_pred = y_pred_train
+                    A_true = y
+                dF_F_train = 10. ** (0.4 * train_Av * (A_true - A_pred)) - 1.0
+            else:
+                dF_F_train = np.full_like(y_pred_train, np.nan)
+
             try:
                 mse_train = mse(y, y_pred_train)
             except:
@@ -122,8 +173,27 @@ def run_operon(ini_file):
                 r2_train = r2_score(y, y_pred_train)
             except:
                 r2_train = np.nan
+            if do_dF_F:
+                try:
+                    medae_train_F = float(np.median(np.abs(dF_F_train)))
+                except:
+                    medae_train_F = np.nan
+            else:
+                medae_train_F = np.nan
 
             y_pred_val = reg.evaluate_model(model, np.asfortranarray(Xval))
+            # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
+            if do_dF_F:
+                if args.fit_log:
+                    A_pred = 10 ** y_pred_val
+                    A_true = 10 ** yval
+                else:
+                    A_pred = y_pred_val
+                    A_true = yval
+                dF_F_val = 10. ** (0.4 * val_Av * (A_true - A_pred)) - 1.0
+            else:
+                dF_F_val = np.full_like(y_pred_val, np.nan)
+
             try:
                 mse_val = mse(yval, y_pred_val)
             except:
@@ -132,19 +202,25 @@ def run_operon(ini_file):
                 r2_val = r2_score(yval, y_pred_val)
             except:
                 r2_val = np.nan
-        
-            to_print = [model_str, model.Length, r2_train, mse_train, r2_val, mse_val]
+            if do_dF_F:
+                try:
+                    medae_val_F = float(np.median(np.abs(dF_F_val)))
+                except:
+                    medae_val_F = np.nan
+            else:
+                medae_val_F = np.nan
+
+            to_print = [model_str, model.Length, r2_train, mse_train, medae_train_F, r2_val, mse_val, medae_val_F]
             print(f'\n{to_print[1]}\n{to_print[0]}\n{to_print[2:]}')
             writer.writerow(to_print)
         
-            output = np.vstack([X.T, y, y_pred_train]).T
-            output_val = np.vstack([Xval.T, yval, y_pred_val]).T
+            output = np.vstack([X.T, y, y_pred_train, dF_F_train]).T
+            output_val = np.vstack([Xval.T, yval, y_pred_val, dF_F_val]).T
             np.savetxt(f'{outname_pred_train}_{model.Length}.csv', output)
             np.savetxt(f'{outname_pred_val}_{model.Length}.csv', output_val)
 
     print('\nRMSE train: ', np.sqrt(mse_train))
     print('RMSE val: ', np.sqrt(mse_val))
-    
     return
 
 

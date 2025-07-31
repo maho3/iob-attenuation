@@ -13,8 +13,6 @@ import re
 
 from utils import OperonArgs
 import sys
-sys.path.insert(0, '../literature_fits')
-from fit_literature import load_data, find_nearest
 
 def split_by_punctuation(s):
     """
@@ -203,42 +201,72 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     rcParams['font.size'] = 16
     rcParams["text.usetex"] = True
     
-    fig, ax = plt.subplots()
+    if 'MedAE_train_F' in df.columns:
+        fig, axs = plt.subplots(1, 2, figsize=(16, 5), sharex=True)
+    else:
+        fig, axs = plt.subplots(1, 1, figsize=(8, 5))
+        axs = [axs]
     cmap = plt.get_cmap('Set1')
-    ax.axvline(df['Length'].to_numpy()[eq_idx], ls=':', color='k', label='Chosen')
+
+    axs[0].axvline(df['Length'].to_numpy()[eq_idx], ls=':', color='k', label='Chosen')
     m = np.isfinite(np.sqrt(df['MSE_train']))
     x = np.array(df['Length'][m])
     y = np.array(np.sqrt(df['MSE_train'])[m])
     i = np.argsort(x)
-    ax.plot(x[i], y[i], marker='.', color=cmap(0), label='Training')
+    axs[0].plot(x[i], y[i], marker='.', color=cmap(0), label='Training')
     m = np.isfinite(np.sqrt(df['MSE_val']))
     x = np.array(df['Length'][m])
     y = np.array(np.sqrt(df['MSE_val'])[m])
     i = np.argsort(x)
-    ax.plot(x[i], y[i], marker='.', ls='--', color=cmap(1), label='Validation')
-    if ax.get_xlim()[1] > args.max_length:
-        ax.set_xlim(None, args.max_length)
-    ax.set_yscale('log')
+    axs[0].plot(x[i], y[i], marker='.', ls='--', color=cmap(1), label='Validation')
+    if axs[0].get_xlim()[1] > args.max_length:
+        axs[0].set_xlim(None, args.max_length)
+    axs[0].set_yscale('log')
     if loss_max is not None:
-        ylim = list(ax.get_ylim())
+        ylim = list(axs[0].get_ylim())
         ylim[1] = min(loss_max, ylim[1])
-        ax.set_ylim(*ylim)
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.set_xlabel('Model Length')
-    ax.set_ylabel('Root Mean Squared Error')
-    ax.legend(loc='upper right')
+        axs[0].set_ylim(*ylim)
+    axs[0].xaxis.set_major_locator(MaxNLocator(integer=True))
+    axs[0].set_xlabel('Model Length')
+    axs[0].set_ylabel('Root Mean Squared Error')
+    axs[0].legend(loc='upper right')
     if args.fit_log:
-        ax.set_title('Fit to log10A')
+        axs[0].set_title('Fit to log10A')
     else:
-        ax.set_title('Fit to A')
+        axs[0].set_title('Fit to A')
+
+    if len(axs) > 1:
+        axs[1].axvline(df['Length'].to_numpy()[eq_idx], ls=':', color='k', label='Chosen')
+        m = np.isfinite(df['MedAE_train_F'])
+        x = np.array(df['Length'][m])
+        y = np.array(df['MedAE_train_F'][m])
+        i = np.argsort(x)
+        axs[1].plot(x[i], y[i], marker='.', color=cmap(0), label='Training')
+        m = np.isfinite(df['MedAE_val_F'])
+        x = np.array(df['Length'][m])
+        y = np.array(df['MedAE_val_F'])[m]
+        i = np.argsort(x)
+        axs[1].plot(x[i], y[i], marker='.', ls='--', color=cmap(1), label='Validation')
+        if axs[1].get_xlim()[1] > args.max_length:
+            axs[1].set_xlim(None, args.max_length)
+        axs[1].set_yscale('log')
+        if loss_max is not None:
+            ylim = list(axs[1].get_ylim())
+            ylim[1] = min(loss_max, ylim[1])
+            axs[1].set_ylim(*ylim)
+        axs[1].xaxis.set_major_locator(MaxNLocator(integer=True))
+        axs[1].set_xlabel('Model Length')
+        axs[1].set_ylabel('Median Absolute Error')
+        axs[1].legend(loc='upper right')
+        axs[1].set_title(r'Results for $\Delta F/F$')
     
     fig.align_labels()
     fig.tight_layout()
 
-    return fig, ax
+    return fig, axs
 
 
-def prediction_plots(ini_file, ilen=None, plot_frac_error=True):
+def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     """
     Show the difference between the truth and predicted
     
@@ -275,15 +303,24 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=True):
     cmap = plt.get_cmap('Set1')
     rcParams['font.size'] = 16
     rcParams["text.usetex"] = True
-        
-    fig, axs = plt.subplots(1, 2, figsize=(15,4), sharex=True, sharey=True)
+
+    # See if we are doing dF/F
+    fname= f'{out_dir}/{run_name}_train_{length}.csv'
+    shape = np.loadtxt(fname).shape[1]
+    do_dF_F = shape > args.npar + 3
+
+    if do_dF_F:
+        fig, axs = plt.subplots(2, 2, figsize=(15,8), sharex=True, sharey='row')
+    else:
+        fig, axs = plt.subplots(1, 2, figsize=(15,4), sharex=True, sharey='row')
+        axs = np.atleast_2d(axs)
 
     for i, name in enumerate(['train', 'val']):
 
         fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
         data = np.loadtxt(fname)
-        ytrue = data[:,-2]
-        ypred = data[:,-1]
+        ytrue = data[:,args.npar+1]
+        ypred = data[:,args.npar+2]
 
         rmse = np.sqrt(np.mean((ytrue - ypred) ** 2))
         print(f'\nRMSE {name}: %.3e'%rmse)
@@ -310,25 +347,41 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=True):
             low = np.percentile(all_frac_res, 50 - delta, axis=0) 
             high = np.percentile(all_frac_res, 50 + delta, axis=0)
             print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
-            axs[i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
-        axs[i].plot(lam, np.median(all_frac_res, axis=0), color='k')
+            axs[0,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
+        axs[0,i].plot(lam, np.median(all_frac_res, axis=0), color='k')
         rmse = np.sqrt(np.mean((all_frac_res) ** 2))
         print("\t\tRMSE:", rmse)
         rmae = np.mean(np.abs(all_frac_res))
         print("\t\tRMAE:", rmae)
 
-        axs[i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
-        axs[i].legend()
-        axs[i].axhline(0, color='k', ls='--', lw=2)
-        axs[i].axhline(0.01, color='k', ls='--', lw=2)
-        axs[i].axhline(-0.01, color='k', ls='--', lw=2)
+        if do_dF_F:
+            dF_F = data[:,args.npar+3]
+            dF_F = dF_F.reshape(-1, len(lam))
+            for j, delta in enumerate(all_perc):
+                low = np.percentile(dF_F, 50 - delta, axis=0) 
+                high = np.percentile(dF_F, 50 + delta, axis=0)
+                print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
+                axs[1,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
+            axs[1,i].plot(lam, np.median(dF_F, axis=0), color='k')
+            print("Median absolute DF/F", np.median(np.abs(dF_F)))
 
-        axs[0].set_title('Training')
-        axs[1].set_title('Validation')
-        if plot_frac_error:
-            axs[0].set_ylabel(r'Fractional Error on $A$')
-        else:
-            axs[0].set_ylabel(r'Absolute Error on $A$')
+        axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
+
+    for ax in axs.flatten():
+        ax.legend(loc='upper right')
+        ax.axhline(0, color='k', ls='--', lw=2)
+        ax.axhline(0.01, color='k', ls='--', lw=2)
+        ax.axhline(-0.01, color='k', ls='--', lw=2)
+
+    axs[0,0].set_title('Training')
+    axs[0,1].set_title('Validation')
+    if plot_frac_error:
+        axs[0,0].set_ylabel(r'Fractional Error on $A$')
+    else:
+        axs[0,0].set_ylabel(r'Absolute Error on $A$')
+    if do_dF_F:
+        axs[1,0].set_ylabel(r'$\Delta F/F$')
+        axs[1,1].set_ylabel(r'$\Delta F/F$')
     
     fig.align_labels()
     fig.tight_layout()
@@ -357,10 +410,6 @@ def plot_example(ini_file, ilen=None, nexamples=5):
     out_dir = pjoin(args.fit_dir, run_name)
     fname = f'{out_dir}/{run_name}_fun.csv'
     df = pd.read_csv(fname, delimiter=';')
-
-    ids, att_groups, attenuation_cols, lam_arr = load_data(args.input_file) # try properties_file instead of input_file
-    v_index = find_nearest(lam_arr, args.lambda_V)
-    lv_key = attenuation_cols[v_index]
     
     if args.fit_log:
         print('\nTarget: log10A')
@@ -382,8 +431,13 @@ def plot_example(ini_file, ilen=None, nexamples=5):
 
         fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
         data = np.loadtxt(fname)
-        ytrue = data[:,-2]
-        ypred = data[:,-1]
+        ytrue = data[:,args.npar+1]
+        ypred = data[:,args.npar+2]
+
+        if data.shape[1] > args.npar+3:
+            dF_F = data[:,args.npar+3]
+        else:
+            dF_F = np.full_like(ytrue, np.nan)
         
         if args.fit_log:
             ytrue = 10. ** ytrue
@@ -406,28 +460,15 @@ def plot_example(ini_file, ilen=None, nexamples=5):
             axs[0,i].plot(lam, t, color=c, ls='--')
             axs[0,i].plot(lam, p, color=c)
             axs[1,i].plot(lam, t - p, color=c)
-
-            # Get A_V for this galaxy and los
-            # Use A_lambda = -2.5 log (F_obs/F_int) to get dF/F
-            gal_id = all_gal_id[j]
-            los = all_los[j]
-            group = att_groups.get_group(gal_id)
-            if not los in group['los'].values:
-                print(f'Warning: LoS {los} not found in group for galaxy {gal_id}. Available LoS:')
-                print(f'\t{group["los"].values}')
-                continue
-            row = group[group['los'].values == los]
-            A_star = row[lv_key].values[0]
-            dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
-            axs[2,i].plot(lam, dF_F, color=c)
+            axs[2,i].plot(lam, dF_F[j*len(lam):(j+1)*len(lam)], color=c)
 
         axs[1,i].axhline(0, color='k', ls='--', lw=2)
         axs[2,i].axhline(0, color='k', ls='--', lw=2)
         axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
         axs[0,i].set_ylim(0, None)
 
-    axs[0,0].set_ylabel(r'$A$')
-    axs[1,0].set_ylabel(r'$A - A_{\rm pred}$')
+    axs[0,0].set_ylabel(r'$A \ / \ A_{\rm V}$')
+    axs[1,0].set_ylabel(r'$\frac{A}{A_{\rm V}} - \left(\frac{A}{A_{\rm V}}\right)_{\rm pred}$')
     axs[2,0].set_ylabel(r'$\Delta F/F$')
                 
     custom_lines = [Line2D([0], [0], color='k', lw=2, ls='--'),
