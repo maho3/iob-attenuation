@@ -24,10 +24,9 @@ Plot ratio of fluxes - not just the attenuation curve
 - Try two validations sets - one with large AV and another with low AV. For 2- and 4- parameter fits, these two different significantly in performance, so it would be interesting to see whether the new fits have similar performance for both. Cut is around A_V > 0.7 for high and for low A_V < 0.2
 - Compare the results of our fits to the literature functions
 - Run multiple fits with different settings (epsilon, basis sets etc.)
+- Create script to rerun optimisation of galaxy-dependent parameters for a SR function. Use the IOB parameters as an initial guess for the optimiser
 
 # To Do
-
-- Create script to rerun optimisation of galaxy-dependent parameters for a SR function
 
 
 # Ideas
