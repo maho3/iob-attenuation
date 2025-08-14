@@ -10,9 +10,13 @@ from os.path import join as pjoin
 from tqdm import tqdm
 from matplotlib.lines import Line2D
 import re
+import os
 
 from utils import OperonArgs
 import sys
+
+sys.path.insert(0, '../literature_fits')
+from attenuation_curves import Att_Curve_2param, Li_08_fit_noratio
 
 def split_by_punctuation(s):
     """
@@ -425,7 +429,7 @@ def plot_example(ini_file, ilen=None, nexamples=5):
     rcParams['font.size'] = 16
     rcParams["text.usetex"] = True
         
-    fig, axs = plt.subplots(3, 2, figsize=(15,9), sharex=True)
+    fig, axs = plt.subplots(3, 2, figsize=(15,9), sharex=True, sharey='row')
 
     for i, name in enumerate(['train', 'val']):
 
@@ -684,6 +688,230 @@ def reparameterise(expr_str, global_vals, xname='x', old_local_prefix='IOB', glo
     print('--'*100 + '\n')
 
     return
+
+
+def string_to_list(s):
+    """
+    Convert a string representation of a list to an actual list.
+    """
+    # Remove brackets and convert
+    cleaned = s.strip('[]')
+    return np.fromstring(cleaned, sep=' ').tolist()
+
+
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
+
+
+def compare_to_literature(ini_file, ilen=None, which_gals='all'):
+    """
+    Compare the errors from the operon run to the literature fits
+    
+    Args:
+        :ini_file (str): The path to the ini file containing the run information
+        :ilen (int, default=None): The length of the equation to highlight. If None,
+            then this is taken to be the final equation
+            
+    Returns:
+        :fig (matplotlib.figure.Figure): Figure containing plot
+        :axs (np.ndarray[matplotlib.pyplot.axis]): Axes of fig containing the plot
+        :which_gals (str, default='all'): The galaxies to be used in the comparison. 'all' for all galaxies, 
+            'low' for galaxies with Av < 0.2, or 'high' for galaxies with Av > 0.7.
+    """
+    
+    args = OperonArgs(ini_file)
+
+    run_name = f'{args.in_param}_{str(args.version_num)}'
+    out_dir = pjoin(args.fit_dir, run_name)
+    fname = f'{out_dir}/{run_name}_fun.csv'
+    df = pd.read_csv(fname, delimiter=';')
+    if ilen is None:
+        eq_idx = -1
+    else:
+        eq_idx = list(df['Length']).index(ilen)
+    length = list(df['Length'])[eq_idx]
+
+    all_data = pd.read_csv(args.input_file, sep='\t')
+    # all_data = all_data.drop_duplicates(subset=["galaxy_id", "los"])
+
+    fig, axs = plt.subplots(4, 2, figsize=(15, 12), sharex=True)
+
+    for r, name in enumerate(['train', 'val']):
+
+        print(f'\nComparing to literature for {name} data...')
+
+        # Load required data
+        matches = pd.read_csv(os.path.join(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'iob_{name}_galaxy_ids_los.txt'), sep='\t')
+        matches.rename(columns={"# galaxy_id": "galaxy_id"}, inplace=True)
+        data = all_data.merge(matches, on=['galaxy_id', 'los'], how='inner')
+        fit_data = pd.read_csv(os.path.join(os.path.dirname(args.input_file), "galaxy_optimization_results.csv"))
+        fit_data.rename(columns={"gal_id": "galaxy_id"}, inplace=True)
+        data = data.merge(fit_data, on=['galaxy_id', 'los'], how='inner')
+        data = data.drop_duplicates(subset=["galaxy_id", "los"])
+
+        # Identify attenuation columns (formatted like A_1000A)
+        attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
+        lam_arr = np.array([int(re.search(r'_(\d+)A', col).group(1)) / 1e4 for col in attenuation_cols])
+        sort_idx = np.argsort(lam_arr)
+        lam_arr = lam_arr[sort_idx]
+        attenuation_cols = [attenuation_cols[i] for i in sort_idx]
+        mask = (lam_arr < args.lam_max) & (lam_arr > args.lam_min)
+        lam_arr = lam_arr[mask]
+        attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
+
+        v_index = find_nearest(lam_arr,0.551)
+        Av_name = attenuation_cols[v_index]
+        print(f'Using Av column: {Av_name}')
+
+        # Get mask for operon fit later
+        operon_mask = np.zeros(len(data['galaxy_id']), dtype=bool)
+        for i, (gid, los) in enumerate(matches[['galaxy_id', 'los']].values):
+            m = (data['galaxy_id'] == gid) & (data['los'] == los)
+            Av = data[Av_name][m].values[0]
+            if which_gals == 'low' and Av < 0.2:
+                operon_mask[i] = True
+            elif which_gals == 'high' and Av > 0.7:
+                operon_mask[i] = True
+            elif which_gals == 'all':
+                operon_mask[i] = True
+
+        # Select galaxies based on Av
+        if which_gals == 'low':
+            mask = (data[Av_name] < 0.2)
+        elif which_gals == 'high':
+            mask = (data[Av_name] > 0.7)
+        elif which_gals == 'all':
+            mask = np.ones(len(data), dtype=bool)
+        else:
+            raise ValueError("Invalid value for 'which_gals'. Choose from 'all', 'low', or 'high'.")
+        data = data[mask]
+        print(f'Using {len(data)} galaxies with Av {which_gals}.')
+
+        assert operon_mask.sum() == len(data), "Operon mask does not match the number of galaxies in the data."
+
+        A_err_2par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+        A_err_4par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+        df_F_2par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+        df_F_4par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+
+
+        for i in tqdm(range(len(data['galaxy_id']))):
+
+            popt_2par = string_to_list(data['popt_2par'].iloc[i])
+            popt_4par = string_to_list(data['popt_4par'].iloc[i])
+            Alam_arr_cut = data[attenuation_cols].iloc[i].values.flatten()
+
+            Av = Alam_arr_cut[v_index]
+            Alam_Av_arr_cut = Alam_arr_cut/Av
+            lam_cut = lam_arr
+            
+            fit_4par = Li_08_fit_noratio(lam_cut, *popt_4par)
+            fit_2par = Att_Curve_2param(1e4*lam_cut, *popt_2par)
+
+            df_F_2par[i] = 10. ** (0.4 * Av * (Alam_Av_arr_cut - fit_2par)) - 1.0
+            df_F_4par[i] = 10. ** (0.4 * Av * (Alam_Av_arr_cut - fit_4par)) - 1.0
+
+            A_err_2par[i] = Alam_Av_arr_cut - fit_2par
+            A_err_4par[i] = Alam_Av_arr_cut - fit_4par
+
+        axs[0,r].plot(lam_cut, np.median(A_err_2par, axis=0), label='2-parameter Fit Error', color='blue')
+        axs[0,r].fill_between(lam_cut, 
+                            np.percentile(A_err_2par, 16, axis=0), 
+                            np.percentile(A_err_2par, 84, axis=0), 
+                            color='blue', alpha=0.2)
+        sigma = np.maximum(np.abs(np.percentile(A_err_2par, 16, axis=0)), np.abs(np.percentile(A_err_2par, 84, axis=0)))
+        axs[2,r].plot(lam_cut, sigma, label='2-parameter Fit Error', color='blue')
+
+        axs[0,r].plot(lam_cut, np.median(A_err_4par, axis=0), label='4-parameter Fit Error', color='orange')
+        axs[0,r].fill_between(lam_cut, 
+                            np.percentile(A_err_4par, 16, axis=0), 
+                            np.percentile(A_err_4par, 84, axis=0), 
+                            color='orange', alpha=0.2)
+        sigma = np.maximum(np.abs(np.percentile(A_err_4par, 16, axis=0)), np.abs(np.percentile(A_err_4par, 84, axis=0)))
+        axs[2,r].plot(lam_cut, sigma, label='4-parameter Fit Error', color='orange')
+
+        axs[1,r].plot(lam_cut, np.median(df_F_2par, axis=0), label='2-parameter Fit Error', color='blue')
+        axs[1,r].fill_between(lam_cut, 
+                            np.percentile(df_F_2par, 16, axis=0), 
+                            np.percentile(df_F_2par, 84, axis=0), 
+                            color='blue', alpha=0.2)
+        sigma = np.maximum(np.abs(np.percentile(df_F_2par, 16, axis=0)), np.abs(np.percentile(df_F_2par, 84, axis=0)))
+        axs[3,r].plot(lam_cut, sigma, label='2-parameter Fit Error', color='blue')
+        
+        axs[1,r].plot(lam_cut, np.median(df_F_4par, axis=0), label='4-parameter Fit Error', color='orange')
+        axs[1,r].fill_between(lam_cut, 
+                            np.percentile(df_F_4par, 16, axis=0), 
+                            np.percentile(df_F_4par, 84, axis=0), 
+                            color='orange', alpha=0.2)
+        sigma = np.maximum(np.abs(np.percentile(df_F_4par, 16, axis=0)), np.abs(np.percentile(df_F_4par, 84, axis=0)))
+        axs[3,r].plot(lam_cut, sigma, label='4-parameter Fit Error', color='orange')
+
+        fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
+        data = np.loadtxt(fname)
+        ytrue = data[:,args.npar+1]
+        ypred = data[:,args.npar+2]
+        if args.fit_log:
+            ypred = 10. ** ypred
+            ytrue = 10. ** ytrue
+        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+        with open(fname, 'r') as f:
+            header = f.readline().split()
+        lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
+        A_err_op = [None] * getattr(args, f'n{name}')
+        df_F_op = [None] * getattr(args, f'n{name}')
+        for j in range(getattr(args, f'n{name}')):
+            A_err_op[j] = ypred[j*len(lam):(j+1)*len(lam)] - ytrue[j*len(lam):(j+1)*len(lam)]
+            df_F_op[j] = data[j*len(lam):(j+1)*len(lam),args.npar+3]
+        A_err_op = np.array(A_err_op)[operon_mask]
+        df_F_op = np.array(df_F_op)[operon_mask]
+
+        c = 'red'
+        axs[0,r].plot(lam_cut, np.median(A_err_op, axis=0), label='SR Fit Error', color=c)
+        axs[0,r].fill_between(lam_cut, 
+                            np.percentile(A_err_op, 16, axis=0), 
+                            np.percentile(A_err_op, 84, axis=0), 
+                            color=c, alpha=0.2)
+        sigma = np.maximum(np.abs(np.percentile(A_err_op, 16, axis=0)), np.abs(np.percentile(A_err_op, 84, axis=0)))
+        axs[2,r].plot(lam_cut, sigma, label='SR Fit Error', color=c)
+        
+        axs[1,r].plot(lam_cut, np.median(df_F_op, axis=0), label='SR Fit Error', color=c)
+        axs[1,r].fill_between(lam_cut, 
+                            np.percentile(df_F_op, 16, axis=0), 
+                            np.percentile(df_F_op, 84, axis=0), 
+                            color=c, alpha=0.2)
+        sigma = np.maximum(np.abs(np.percentile(df_F_op, 16, axis=0)), np.abs(np.percentile(df_F_op, 84, axis=0)))
+        axs[3,r].plot(lam_cut, sigma, label='SR Fit Error', color=c)
+
+        axs[0,r].set_ylabel(r'Error on $A_\lambda / A_v$')
+        axs[0,r].axhline(0, color='black', ls='--')
+        axs[1,r].set_ylabel(r'$\Delta F / F$')
+        axs[1,r].axhline(0, color='black', ls='--')
+        axs[2,r].set_ylabel(r'Error on $A_\lambda / A_v$ (sigma)')
+        axs[3,r].set_ylabel(r'$\Delta F / F$ (sigma)')
+
+        if name == 'val':
+            axs[0,r].set_title('Validation Data')
+        else:
+            axs[0,r].set_title(f'{name.capitalize()} Data')
+        axs[-1,r].set_xlabel(r'$\lambda / \lambda_V$')
+        axs[0,r].legend()
+
+        for ax in axs[2:,r]:
+            ax.set_ylim(0, None)
+
+        medae_F_2par = float(np.median(np.abs(df_F_2par)))
+        medae_F_4par = float(np.median(np.abs(df_F_4par)))
+        medae_F_op = float(np.median(np.abs(df_F_op)))
+
+        print(f"\tMedian Absolute Deviation of dF/F for 2-parameter fit on training data: {medae_F_2par}")
+        print(f"\tMedian Absolute Deviation of dF/F for 4-parameter fit on training data: {medae_F_4par}")
+        print(f"\tMedian Absolute Deviation of dF/F for SR fit on training data: {medae_F_op}")
+
+    fig.subplots_adjust(hspace=0.05)
+
+    return fig, axs
 
 
 # Here we define some useful sympy variables
