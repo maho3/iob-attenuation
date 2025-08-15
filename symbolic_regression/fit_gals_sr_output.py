@@ -18,13 +18,13 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 
-def optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, IOB, do_plot=False):
-        
+def optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, IOB, do_plot=False, lambda_v=0.5542):
+
     if do_plot:
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
 
     ### Normalising ad A_lambda to Av
-    v_index = find_nearest(lam_arr,0.551)
+    v_index = find_nearest(lam_arr, lambda_v)
     Av = Alam_arr_cut[v_index]
     lam_v = lam_arr[v_index]
     Alam_Av_arr_cut = Alam_arr_cut/Av

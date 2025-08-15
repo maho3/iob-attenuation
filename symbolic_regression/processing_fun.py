@@ -867,7 +867,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         lam_arr = lam_arr[mask]
         attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
 
-        v_index = find_nearest(lam_arr,0.551)
+        v_index = find_nearest(lam_arr, args.lambda_V)
         Av_name = attenuation_cols[v_index]
         print(f'Using Av column: {Av_name}')
 
@@ -921,6 +921,8 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
 
             A_err_2par[i] = Alam_Av_arr_cut - fit_2par
             A_err_4par[i] = Alam_Av_arr_cut - fit_4par
+
+        mask_low_lambda_lit = (lam_cut < 0.4 * args.lambda_V)
 
         axs[0,r].plot(lam_cut, np.median(A_err_2par, axis=0), label='2-parameter Fit Error', color='blue')
         axs[0,r].fill_between(lam_cut, 
@@ -976,7 +978,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
             lam_cut = lam_arr
 
-            v_index = find_nearest(lam_arr,0.551)
+            v_index = find_nearest(lam_arr, args.lambda_V)
             Av_name = attenuation_cols[v_index]
 
             # Select galaxies based on Av
@@ -1027,6 +1029,8 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             A_err_op = np.array(A_err_op)[operon_mask]
             df_F_op = np.array(df_F_op)[operon_mask]
 
+        mask_low_lambda_op = (lam_cut < 0.4 * args.lambda_V)
+
         c = 'red'
         axs[0,r].plot(lam_cut, np.median(A_err_op, axis=0), label='SR Fit Error', color=c)
         axs[0,r].fill_between(lam_cut, 
@@ -1061,10 +1065,22 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         for ax in axs[2:,r]:
             ax.set_ylim(0, None)
 
+
         medae_F_2par = float(np.median(np.abs(df_F_2par)))
         medae_F_4par = float(np.median(np.abs(df_F_4par)))
         medae_F_op = float(np.median(np.abs(df_F_op)))
 
+        print(f"\tMedian Absolute Deviation of dF/F for 2-parameter fit on training data: {medae_F_2par}")
+        print(f"\tMedian Absolute Deviation of dF/F for 4-parameter fit on training data: {medae_F_4par}")
+        print(f"\tMedian Absolute Deviation of dF/F for SR fit on training data: {medae_F_op}")
+
+        # Now do this for low wavelengths only
+        medae_F_2par = float(np.median(np.abs(df_F_2par[:,mask_low_lambda_lit])))
+        medae_F_4par = float(np.median(np.abs(df_F_4par[:,mask_low_lambda_lit])))
+        medae_F_op = float(np.median(np.abs(df_F_op[:,mask_low_lambda_op])))
+
+        print("")
+        print("\tLow wavelengths:")
         print(f"\tMedian Absolute Deviation of dF/F for 2-parameter fit on training data: {medae_F_2par}")
         print(f"\tMedian Absolute Deviation of dF/F for 4-parameter fit on training data: {medae_F_4par}")
         print(f"\tMedian Absolute Deviation of dF/F for SR fit on training data: {medae_F_op}")

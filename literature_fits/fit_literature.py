@@ -109,13 +109,13 @@ def load_data(fname):
     return ids, att_groups, attenuation_cols, lam_arr
 
 
-def optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, do_plot=False):
+def optimise_gal(gal_id, los, lam_arr, Alam_arr_cut, do_plot=False, lambda_v=0.5542):
         
     if do_plot:
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
 
     ### Normalising ad A_lambda to Av
-    v_index = find_nearest(lam_arr,0.551)
+    v_index = find_nearest(lam_arr, lambda_v)
     Av = Alam_arr_cut[v_index]
     Alam_Av_arr_cut = Alam_arr_cut/Av
     lam_cut = lam_arr[lam_arr < 1.]

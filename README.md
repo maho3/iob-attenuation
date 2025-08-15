@@ -28,12 +28,33 @@ Plot ratio of fluxes - not just the attenuation curve
 
 # To Do
 
+- Find requirements for SDSS catalogs for LtU in terms of DF/F
+- 4-parameeter fit has a problem with degeneracy
+    * A good result could be less degenerate parameters even if the fits are similar in quality
+    * Re-parameterise the 4-parameter model to remove some degeneracies
+- Send Laura an example function so we can
+    1. Fix A/Av=1 at lv (by Sep.)
+    2. Set the offset  (by Sep.)
+    3. Run MCMC to see if our parameters are less degenerate (few examples by Sep.)
+    4. Are these parameters more correlated with galaxy properties? (post Sep.)
+- Optimise the curves which appear in PCA code but not IOB
+- Do a fit with just first 4 IOB parameters
+- Subsample the attenuation curve to remove the latger wavelengths
 
-# Ideas
 
-- A main problems with the new fits are
-    1. We don't get A/Av=1 and Lv guaranteed
-    2. Beyond Lv, the attenuation curve is approximately consant but galaxy-dependent. But the curves never get this bit right
-- Solutions:
-    1. We just enforce this manually afterwards for the functions we like the look of
-    2. When re-optimising the functions afterwards, we could add a galaxy-dependent offset parameter. Alternatively, we could give A/Av at the final wavelength as an input feauture alongside the IOB parameters, so it could be used in the fit.
+
+# Ideas/Comments
+
+1. We don't get A/Av=1 and Lv guaranteed
+    * We just enforce this manually afterwards for the functions we like the look of
+
+2. Beyond Lv, the attenuation curve is approximately consant but galaxy-dependent. But the curves never get this bit right
+    * When re-optimising the functions afterwards, we could add a galaxy-dependent offset parameter. 
+    * Alternatively, we could give A/Av at the final wavelength as an input feauture alongside the IOB parameters, so it could be used in the fit.
+
+3. We don't care so much about the high-wavelength part of the curve. This is partly solved by using MSE on Alamda/Av instead of on log of this
+    * Could also sub-sample wavelengths at large lambda so we have fewer points out there
+
+4. The functions at the knee of the Pareto front don't always have IOB3 or IOB4, yet these were needed to get a converged MSE in the IOB code
+    * Always select functions with these in
+    * Can we make the decoder of the IOB smaller so that they appear more simply in the expressions? Perhaps it is too complicated to add them for the gaint they provide
