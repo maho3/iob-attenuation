@@ -48,7 +48,7 @@ Plot ratio of fluxes - not just the attenuation curve
 1. We don't get A/Av=1 and Lv guaranteed
     * We just enforce this manually afterwards for the functions we like the look of
 
-2. Beyond Lv, the attenuation curve is approximately consant but galaxy-dependent. But the curves never get this bit right
+2. Beyond Lv, the attenuation curve is approximately constant but galaxy-dependent. But the curves never get this bit right
     * When re-optimising the functions afterwards, we could add a galaxy-dependent offset parameter. 
     * Alternatively, we could give A/Av at the final wavelength as an input feauture alongside the IOB parameters, so it could be used in the fit.
 
@@ -57,4 +57,4 @@ Plot ratio of fluxes - not just the attenuation curve
 
 4. The functions at the knee of the Pareto front don't always have IOB3 or IOB4, yet these were needed to get a converged MSE in the IOB code
     * Always select functions with these in
-    * Can we make the decoder of the IOB smaller so that they appear more simply in the expressions? Perhaps it is too complicated to add them for the gaint they provide
+    * Can we make the decoder of the IOB smaller so that they appear more simply in the expressions? Perhaps it is too complicated to add them for the gain they provide

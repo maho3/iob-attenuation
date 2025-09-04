@@ -47,6 +47,22 @@ def get_data(ini_file):
     print('\tWavelengths:', lam_arr)
     lam_arr = lam_arr / args.lambda_V
 
+    # Subsample wavelengths if specified
+    if args.lambda_trans is not None and args.f_subsample is not None:
+        print(f'\tSubsampling wavelengths above {args.lambda_trans} by a factor of {args.f_subsample}')
+        lambda_trans = args.lambda_trans / args.lambda_V
+        mask_below = lam_arr < lambda_trans
+        idx_above = np.nonzero(lam_arr >= lambda_trans)[0]
+        mask_above = np.zeros_like(mask_below)
+        mask_above[idx_above[::args.f_subsample]] = True
+        mask = mask_below | mask_above
+        lam_arr = lam_arr[mask]
+        attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
+        print('\tSubsampled wavelengths:', lam_arr * args.lambda_V)
+        print('\tNumber of wavelengths after subsampling:', len(lam_arr), 'from', len(mask))
+    else:
+        print('\tNo subsampling of wavelengths')
+
     # Get all galaxy ids
     galaxy_ids = data['galaxy_id'].unique()
     print('\tNumber of unique galaxies:', len(galaxy_ids), 'of', len(data), 'attenuation curves')

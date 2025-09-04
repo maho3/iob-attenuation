@@ -54,7 +54,13 @@ class OperonArgs(object):
         self.fit_log = bool(config['data']['fit_log'].strip().lower() == 'true')
         self.lam_max = float(config['data']['lam_max'])
         self.lam_min = float(config['data']['lam_min'])
-        
+
+        val = config['data'].get('lambda_trans')
+        self.lambda_trans = float(val) if val is not None else None
+
+        val = config['data'].get('f_subsample')
+        self.f_subsample = int(val) if val is not None else None
+
         self.allowed_symbols = config['operon']['allowed_symbols']
         self.epsilon = float(config['operon']['epsilon'])
         self.max_length = int(config['operon']['max_length'])
