@@ -387,6 +387,11 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     if do_dF_F:
         axs[1,0].set_ylabel(r'$\Delta F/F$')
         axs[1,1].set_ylabel(r'$\Delta F/F$')
+
+    if args.lambda_trans is not None and args.f_subsample is not None:
+        lambda_trans = args.lambda_trans / args.lambda_V
+        for ax in axs.flatten():
+            ax.axvline(lambda_trans, color='k', linestyle=':')
     
     fig.align_labels()
     fig.tight_layout()
@@ -482,6 +487,11 @@ def plot_example(ini_file, ilen=None, nexamples=5):
         ax.legend(custom_lines, ['True', 'Predicted'])
     axs[0,0].set_title('Training')
     axs[0,1].set_title('Validation')
+
+    if args.lambda_trans is not None and args.f_subsample is not None:
+        lambda_trans = args.lambda_trans / args.lambda_V
+        for ax in axs.flatten():
+            ax.axvline(lambda_trans, color='k', linestyle=':')
         
     fig.align_labels()
     fig.tight_layout()
@@ -1029,24 +1039,40 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             A_err_op = np.array(A_err_op)[operon_mask]
             df_F_op = np.array(df_F_op)[operon_mask]
 
-        mask_low_lambda_op = (lam_cut < 0.4 * args.lambda_V)
+        # Subsample wavelengths if specified
+        if args.lambda_trans is not None and args.f_subsample is not None:
+            print(f'\tSubsampling wavelengths above {args.lambda_trans} by a factor of {args.f_subsample}')
+            lambda_trans = args.lambda_trans #/ args.lambda_V
+            mask_below = lam_cut < lambda_trans
+            idx_above = np.nonzero(lam_cut >= lambda_trans)[0]
+            mask_above = np.zeros_like(mask_below)
+            mask_above[idx_above[::args.f_subsample]] = True
+            mask = mask_below | mask_above
+            lam_cut_sub = lam_cut[mask]
+            print('\tSubsampled wavelengths:', lam_cut_sub)
+            print('\tNumber of wavelengths after subsampling:', len(lam_cut_sub), 'from', len(mask))
+        else:
+            lam_cut_sub = lam_cut
+            print('\tNo subsampling of wavelengths')
+
+        mask_low_lambda_op = (lam_cut_sub < 0.4 * args.lambda_V)
 
         c = 'red'
-        axs[0,r].plot(lam_cut, np.median(A_err_op, axis=0), label='SR Fit Error', color=c)
-        axs[0,r].fill_between(lam_cut, 
+        axs[0,r].plot(lam_cut_sub, np.median(A_err_op, axis=0), label='SR Fit Error', color=c)
+        axs[0,r].fill_between(lam_cut_sub, 
                             np.percentile(A_err_op, 16, axis=0), 
                             np.percentile(A_err_op, 84, axis=0), 
                             color=c, alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(A_err_op, 16, axis=0)), np.abs(np.percentile(A_err_op, 84, axis=0)))
-        axs[2,r].plot(lam_cut, sigma, label='SR Fit Error', color=c)
-        
-        axs[1,r].plot(lam_cut, np.median(df_F_op, axis=0), label='SR Fit Error', color=c)
-        axs[1,r].fill_between(lam_cut, 
+        axs[2,r].plot(lam_cut_sub, sigma, label='SR Fit Error', color=c)
+
+        axs[1,r].plot(lam_cut_sub, np.median(df_F_op, axis=0), label='SR Fit Error', color=c)
+        axs[1,r].fill_between(lam_cut_sub, 
                             np.percentile(df_F_op, 16, axis=0), 
                             np.percentile(df_F_op, 84, axis=0), 
                             color=c, alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(df_F_op, 16, axis=0)), np.abs(np.percentile(df_F_op, 84, axis=0)))
-        axs[3,r].plot(lam_cut, sigma, label='SR Fit Error', color=c)
+        axs[3,r].plot(lam_cut_sub, sigma, label='SR Fit Error', color=c)
 
         axs[0,r].set_ylabel(r'Error on $A_\lambda / A_{\rm V}$')
         axs[0,r].axhline(0, color='black', ls='--')
@@ -1084,6 +1110,11 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         print(f"\tMedian Absolute Deviation of dF/F for 2-parameter fit on training data: {medae_F_2par}")
         print(f"\tMedian Absolute Deviation of dF/F for 4-parameter fit on training data: {medae_F_4par}")
         print(f"\tMedian Absolute Deviation of dF/F for SR fit on training data: {medae_F_op}")
+
+    if args.lambda_trans is not None and args.f_subsample is not None:
+        lambda_trans = args.lambda_trans / args.lambda_V
+        for ax in axs.flatten():
+            ax.axvline(lambda_trans, color='k', linestyle=':')
 
     fig.subplots_adjust(hspace=0.05)
 
