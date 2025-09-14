@@ -67,7 +67,7 @@ def is_float(s):
     except:
         return False
 
-def replace_floats(s):
+def replace_floats(s, prefix='b'):
     """
     Replace the floats in a string by parameters named b0, b1, ...
     where each float (even if they have the same value) is assigned a
@@ -75,6 +75,7 @@ def replace_floats(s):
     
     Args:
         :s (str): The string to consider
+        :prefix (str, default='b'): The prefix to use for the parameters
         
     Returns:
         :replaced (str): The same string, but with floats replaced by parameter names
@@ -86,23 +87,23 @@ def replace_floats(s):
     for i in range(len(split_str)):
         if is_float(split_str[i]) and "." in split_str[i]:
             values.append(float(split_str[i]))
-            split_str[i] = f'b{len(values)-1}'
+            split_str[i] = f'{prefix}{len(values)-1}'
         elif len(split_str[i]) > 1 and split_str[i][-1] == 'e' and is_float(split_str[i][:-1]):
             if split_str[i+1] in ['+', '-']:
                 values.append(float(''.join(split_str[i:i+3])))
-                split_str[i] = f'b{len(values)-1}'
+                split_str[i] = f'{prefix}{len(values)-1}'
                 split_str[i+1] = ''
                 split_str[i+2] = ''
             else:
                 assert split_str[i+1].is_digit()
                 values.append(float(''.join(split_str[i:i+2])))
-                split_str[i] = f'b{len(values)-1}'
+                split_str[i] = f'{prefix}{len(values)-1}'
                 split_str[i+1] = ''
     replaced = ''.join(split_str)
     return replaced, values
 
 
-def convert_operon_fun(eq, names, do_replace_floats=True):
+def convert_operon_fun(eq, names, do_replace_floats=True, prefix='b'):
     """
     Given the function outputted by operon, express this so that
     the variables are now appropriately names and the floats are
@@ -111,6 +112,8 @@ def convert_operon_fun(eq, names, do_replace_floats=True):
     Args:
         :eq (str): The equation outputted by operon
         :names (list[str]): The names of the parameters in order passed to operon
+        :do_replace_floats (bool, default=True): Whether to replace floats by parameters
+        :prefix (str, default='b'): The prefix to use for the parameters if replacing floats
     
     Returns:
         :new_eq (str): The equation with the replaced symbols and floats
@@ -124,14 +127,14 @@ def convert_operon_fun(eq, names, do_replace_floats=True):
     new_eq = ''.join(new_eq)
     new_eq = sympy.sympify(new_eq)
     if do_replace_floats:
-        new_eq, values = replace_floats(str(new_eq))
+        new_eq, values = replace_floats(str(new_eq), prefix=prefix)
     else:
         values = []
     
     return new_eq, values
 
 
-def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
+def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, prefix='b'):
     """
     Make the Pareto front plot
     
@@ -141,6 +144,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
             then this is taken to be the final equation
         :loss_max (float, default=None): Maximum value y axis can take
         :print_par_table (bool, default=False): Whether to print each parameter out individually
+        :prefix (str, default='b'): The prefix to use for the parameters if replacing floats
             
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing Pareto front
@@ -174,7 +178,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     eq, _ = convert_operon_fun(best_eq, names, do_replace_floats=False)
     print('\nEquation with pars')
     print(eq)
-    eq, pars = convert_operon_fun(best_eq, names)
+    eq, pars = convert_operon_fun(best_eq, names, do_replace_floats=True, prefix=prefix)
     print('\nConverted equation:')
     print(eq)
     print('\nNumber of parameters:', len(pars))
@@ -182,6 +186,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     if print_par_table:
         for i in range(len(pars)):
             print(f'b{i} = {pars[i]}')
+
         
     # Make a nicer visual version
     param_dict = {}
@@ -192,17 +197,23 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False):
     for i, n in enumerate(names):
         if n in param_dict.keys():
             names[i] = param_dict[n]
-    pretty_eq, pars = convert_operon_fun(best_eq, names)
+    pretty_eq, pars = convert_operon_fun(best_eq, names, do_replace_floats=True, prefix=prefix)
     pretty_eq = sympy.sympify(pretty_eq)
     display(pretty_eq)
     print('\nLatex version:')
     sympy.print_latex(pretty_eq)
 
+    # Evaluate equation at x = 1
+    x = sympy.Symbol('x')
+    eq_at_1 = pretty_eq.subs(x, 1)
+    print('\nValue at x=1:')
+    display(eq_at_1)
+
     # Make a reparameterised version
-    global_vals = {f'b{i}': pars[i] for i in range(len(pars))}
-    print(eq)
-    reparameterise(eq, global_vals, xname='lam', old_local_prefix=args.in_param.upper(), global_prefix='a', local_prefix='B')
-    
+    global_vals = {f'{prefix}{i}': pars[i] for i in range(len(pars))}
+    reparameterise(eq, global_vals, xname='lam', old_local_prefix=args.in_param.upper(),
+                   old_global_prefix=prefix, global_prefix='a', local_prefix='B')
+
     rcParams['font.size'] = 16
     rcParams["text.usetex"] = True
     
@@ -399,7 +410,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     return fig, axs
 
 
-def plot_example(ini_file, ilen=None, nexamples=5):
+def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, plot_dF_F=True):
     """
     Plot an example curve
     
@@ -408,6 +419,10 @@ def plot_example(ini_file, ilen=None, nexamples=5):
         :ilen (int, default=None): The length of the equation to highlight. If None,
             then this is taken to be the final equation
         :nexamples (int, default=5): Number of examples to plot
+        :offset (int, default=0): The offset in the examples to plot
+        :plot_av_diff (bool, default=True): Whether to plot the difference between
+            the true and predicted attenuation curve
+        :plot_dF_F (bool, default=True): Whether to plot the dF/F values
             
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing plot
@@ -435,7 +450,9 @@ def plot_example(ini_file, ilen=None, nexamples=5):
     rcParams['font.size'] = 16
     rcParams["text.usetex"] = True
         
-    fig, axs = plt.subplots(3, 2, figsize=(15,9), sharex=True, sharey='row')
+    nrow = 1 + int(plot_av_diff) + int(plot_dF_F)
+    fig, axs = plt.subplots(nrow, 2, figsize=(15,4*nrow), sharex=True, sharey='row')
+    axs = np.atleast_2d(axs)
 
     for i, name in enumerate(['train', 'val']):
 
@@ -463,23 +480,29 @@ def plot_example(ini_file, ilen=None, nexamples=5):
         lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
         
         # ytrue here is A
-        for j in range(nexamples):
-            c = f'C{j}'
+        for j in range(offset, offset+nexamples):
+            c = f'C{j-offset}'
             t = ytrue[j*len(lam):(j+1)*len(lam)]
             p = ypred[j*len(lam):(j+1)*len(lam)]
             axs[0,i].plot(lam, t, color=c, ls='--')
             axs[0,i].plot(lam, p, color=c)
-            axs[1,i].plot(lam, t - p, color=c)
-            axs[2,i].plot(lam, dF_F[j*len(lam):(j+1)*len(lam)], color=c)
+            if plot_av_diff:
+                axs[1,i].plot(lam, t - p, color=c)
+            if plot_dF_F:
+                axs[2,i].plot(lam, dF_F[j*len(lam):(j+1)*len(lam)], color=c)
 
-        axs[1,i].axhline(0, color='k', ls='--', lw=2)
-        axs[2,i].axhline(0, color='k', ls='--', lw=2)
+        if plot_av_diff:
+            axs[1,i].axhline(0, color='k', ls='--', lw=2)
+        if plot_dF_F:
+            axs[2,i].axhline(0, color='k', ls='--', lw=2)
         axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
         axs[0,i].set_ylim(0, None)
 
     axs[0,0].set_ylabel(r'$A \ / \ A_{\rm V}$')
-    axs[1,0].set_ylabel(r'$\frac{A}{A_{\rm V}} - \left(\frac{A}{A_{\rm V}}\right)_{\rm pred}$')
-    axs[2,0].set_ylabel(r'$\Delta F/F$')
+    if plot_av_diff:
+        axs[1,0].set_ylabel(r'$\frac{A}{A_{\rm V}} - \left(\frac{A}{A_{\rm V}}\right)_{\rm pred}$')
+    if plot_dF_F:
+        axs[2,0].set_ylabel(r'$\Delta F/F$')
                 
     custom_lines = [Line2D([0], [0], color='k', lw=2, ls='--'),
                 Line2D([0], [0], color='k', lw=2, ls='-')]
@@ -601,7 +624,7 @@ def generate_code(mapping, b, old_local_prefix='IOB', old_global_prefix='b'):
     return "\n".join(code_lines)
 
 
-def reparameterise(expr_str, global_vals, xname='x', old_local_prefix='IOB', global_prefix='a', local_prefix='b'):
+def reparameterise(expr_str, global_vals, xname='x', old_global_prefix='b', old_local_prefix='IOB', global_prefix='a', local_prefix='b'):
     """
     Reparameterise the expression to only keep as a function of a single variable, as well as local and global parameters.
     This function will replace all x-independent parts of the expression by parameters, and rename the parameters
@@ -612,6 +635,7 @@ def reparameterise(expr_str, global_vals, xname='x', old_local_prefix='IOB', glo
         :global_vals (dict): A dictionary containing the values of the global parameters, where the
             keys are the parameter names and the values are the parameter values.
         :xname (str, default='x'): The name of the variable in the expression
+        :old_global_prefix (str, default='b'): The prefix for the global parameters in the input expression
         :old_local_prefix (str, default='IOB'): The prefix for the local parameters in the input expression
         :global_prefix (str, default='a'): The prefix for the global parameters in the output expression
         :local_prefix (str, default='b'): The prefix for the local parameters in the output expression
@@ -772,6 +796,16 @@ def reparameterise(expr_str, global_vals, xname='x', old_local_prefix='IOB', glo
 
     expr = expr.replace(sympy.Symbol('lam'), sympy.Symbol('x'))
     display(expr)
+
+    print('\nLatex version:')
+    sympy.print_latex(expr)
+
+    # Evaluate equation at x = 1
+    x = sympy.Symbol('x')
+    eq_at_1 = expr.subs(x, 1)
+    print('\nValue at x=1:')
+    display(eq_at_1)
+
     print('--'*100 + '\n')
 
     # Save code to file
@@ -783,7 +817,7 @@ def reparameterise(expr_str, global_vals, xname='x', old_local_prefix='IOB', glo
         f.write("# Do not edit this file directly.\n\n")
         f.write("import numpy as np\n")
 
-        code = generate_code(local_replacements, global_vals, old_local_prefix='IOB', old_global_prefix='b')
+        code = generate_code(local_replacements, global_vals, old_local_prefix='IOB', old_global_prefix=old_global_prefix)
         print("", file=f)
         print(code, file=f)
 
@@ -851,6 +885,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
     # all_data = all_data.drop_duplicates(subset=["galaxy_id", "los"])
 
     fig, axs = plt.subplots(4, 2, figsize=(15, 12), sharex=True)
+    fig2, axs2 = plt.subplots(1, 2, figsize=(14, 3),)
 
     for r, name in enumerate(['train', 'val']):
 
@@ -911,6 +946,8 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         A_err_4par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
         df_F_2par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
         df_F_4par = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+        A_at_lv_2par = np.zeros(len(data['galaxy_id']))
+        A_at_lv_4par = np.zeros(len(data['galaxy_id']))
 
 
         for i in tqdm(range(len(data['galaxy_id']))):
@@ -932,39 +969,46 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             A_err_2par[i] = Alam_Av_arr_cut - fit_2par
             A_err_4par[i] = Alam_Av_arr_cut - fit_4par
 
+            A_at_lv_2par[i] = fit_2par[v_index]
+            A_at_lv_4par[i] = fit_4par[v_index]
+
+
         mask_low_lambda_lit = (lam_cut < 0.4 * args.lambda_V)
 
-        axs[0,r].plot(lam_cut, np.median(A_err_2par, axis=0), label='2-parameter Fit Error', color='blue')
-        axs[0,r].fill_between(lam_cut, 
+        axs[0,r].plot(lam_cut/args.lambda_V, np.median(A_err_2par, axis=0), label='2-parameter Fit Error', color='blue')
+        axs[0,r].fill_between(lam_cut/args.lambda_V, 
                             np.percentile(A_err_2par, 16, axis=0), 
                             np.percentile(A_err_2par, 84, axis=0), 
                             color='blue', alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(A_err_2par, 16, axis=0)), np.abs(np.percentile(A_err_2par, 84, axis=0)))
-        axs[2,r].plot(lam_cut, sigma, label='2-parameter Fit Error', color='blue')
+        axs[2,r].plot(lam_cut/args.lambda_V, sigma, label='2-parameter Fit Error', color='blue')
 
-        axs[0,r].plot(lam_cut, np.median(A_err_4par, axis=0), label='4-parameter Fit Error', color='orange')
-        axs[0,r].fill_between(lam_cut, 
+        axs[0,r].plot(lam_cut/args.lambda_V, np.median(A_err_4par, axis=0), label='4-parameter Fit Error', color='orange')
+        axs[0,r].fill_between(lam_cut/args.lambda_V, 
                             np.percentile(A_err_4par, 16, axis=0), 
                             np.percentile(A_err_4par, 84, axis=0), 
                             color='orange', alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(A_err_4par, 16, axis=0)), np.abs(np.percentile(A_err_4par, 84, axis=0)))
-        axs[2,r].plot(lam_cut, sigma, label='4-parameter Fit Error', color='orange')
+        axs[2,r].plot(lam_cut/args.lambda_V, sigma, label='4-parameter Fit Error', color='orange')
 
-        axs[1,r].plot(lam_cut, np.median(df_F_2par, axis=0), label='2-parameter Fit Error', color='blue')
-        axs[1,r].fill_between(lam_cut, 
+        axs[1,r].plot(lam_cut/args.lambda_V, np.median(df_F_2par, axis=0), label='2-parameter Fit Error', color='blue')
+        axs[1,r].fill_between(lam_cut/args.lambda_V, 
                             np.percentile(df_F_2par, 16, axis=0), 
                             np.percentile(df_F_2par, 84, axis=0), 
                             color='blue', alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(df_F_2par, 16, axis=0)), np.abs(np.percentile(df_F_2par, 84, axis=0)))
-        axs[3,r].plot(lam_cut, sigma, label='2-parameter Fit Error', color='blue')
-        
-        axs[1,r].plot(lam_cut, np.median(df_F_4par, axis=0), label='4-parameter Fit Error', color='orange')
-        axs[1,r].fill_between(lam_cut, 
+        axs[3,r].plot(lam_cut/args.lambda_V, sigma, label='2-parameter Fit Error', color='blue')
+
+        axs[1,r].plot(lam_cut/args.lambda_V, np.median(df_F_4par, axis=0), label='4-parameter Fit Error', color='orange')
+        axs[1,r].fill_between(lam_cut/args.lambda_V, 
                             np.percentile(df_F_4par, 16, axis=0), 
                             np.percentile(df_F_4par, 84, axis=0), 
                             color='orange', alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(df_F_4par, 16, axis=0)), np.abs(np.percentile(df_F_4par, 84, axis=0)))
-        axs[3,r].plot(lam_cut, sigma, label='4-parameter Fit Error', color='orange')
+        axs[3,r].plot(lam_cut/args.lambda_V, sigma, label='4-parameter Fit Error', color='orange')
+
+        axs2[r].hist(A_at_lv_2par, bins=30, density=True, alpha=0.5, label='2-parameter Fit', color='blue')
+        axs2[r].hist(A_at_lv_4par, bins=30, density=True, alpha=0.5, label='4-parameter Fit', color='orange')
 
         if use_optimised:
 
@@ -1004,6 +1048,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
 
             A_err_op = np.zeros((len(data['galaxy_id']), len(lam_arr)))
             df_F_op = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+            A_at_lv_op = np.zeros(len(data['galaxy_id']))
 
             for i in tqdm(range(len(data['galaxy_id']))):
 
@@ -1016,6 +1061,8 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
                 
                 df_F_op[i] = 10. ** (0.4 * Av * (Alam_Av_arr_cut - fit_op)) - 1.0
                 A_err_op[i] = Alam_Av_arr_cut - fit_op
+
+                A_at_lv_op[i] = fit_op[v_index]
 
         else:
 
@@ -1033,9 +1080,11 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
             A_err_op = [None] * getattr(args, f'n{name}')
             df_F_op = [None] * getattr(args, f'n{name}')
+            A_at_lv_op = [None] * getattr(args, f'n{name}')
             for j in range(getattr(args, f'n{name}')):
                 A_err_op[j] = ypred[j*len(lam):(j+1)*len(lam)] - ytrue[j*len(lam):(j+1)*len(lam)]
                 df_F_op[j] = data[j*len(lam):(j+1)*len(lam),args.npar+3]
+                A_at_lv_op[j] = ypred[j*len(lam):(j+1)*len(lam)][v_index]
             A_err_op = np.array(A_err_op)[operon_mask]
             df_F_op = np.array(df_F_op)[operon_mask]
 
@@ -1058,21 +1107,23 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         mask_low_lambda_op = (lam_cut_sub < 0.4 * args.lambda_V)
 
         c = 'red'
-        axs[0,r].plot(lam_cut_sub, np.median(A_err_op, axis=0), label='SR Fit Error', color=c)
-        axs[0,r].fill_between(lam_cut_sub, 
+        axs[0,r].plot(lam_cut_sub/args.lambda_V, np.median(A_err_op, axis=0), label='SR Fit Error', color=c)
+        axs[0,r].fill_between(lam_cut_sub/args.lambda_V, 
                             np.percentile(A_err_op, 16, axis=0), 
                             np.percentile(A_err_op, 84, axis=0), 
                             color=c, alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(A_err_op, 16, axis=0)), np.abs(np.percentile(A_err_op, 84, axis=0)))
-        axs[2,r].plot(lam_cut_sub, sigma, label='SR Fit Error', color=c)
+        axs[2,r].plot(lam_cut_sub/args.lambda_V, sigma, label='SR Fit Error', color=c)
 
-        axs[1,r].plot(lam_cut_sub, np.median(df_F_op, axis=0), label='SR Fit Error', color=c)
-        axs[1,r].fill_between(lam_cut_sub, 
+        axs[1,r].plot(lam_cut_sub/args.lambda_V, np.median(df_F_op, axis=0), label='SR Fit Error', color=c)
+        axs[1,r].fill_between(lam_cut_sub/args.lambda_V, 
                             np.percentile(df_F_op, 16, axis=0), 
                             np.percentile(df_F_op, 84, axis=0), 
                             color=c, alpha=0.2)
         sigma = np.maximum(np.abs(np.percentile(df_F_op, 16, axis=0)), np.abs(np.percentile(df_F_op, 84, axis=0)))
-        axs[3,r].plot(lam_cut_sub, sigma, label='SR Fit Error', color=c)
+        axs[3,r].plot(lam_cut_sub/args.lambda_V, sigma, label='SR Fit Error', color=c)
+
+        axs2[r].hist(A_at_lv_op, bins=30, density=True, alpha=0.5, label='SR Fit', color=c)
 
         axs[0,r].set_ylabel(r'Error on $A_\lambda / A_{\rm V}$')
         axs[0,r].axhline(0, color='black', ls='--')
@@ -1080,6 +1131,15 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         axs[1,r].axhline(0, color='black', ls='--')
         axs[2,r].set_ylabel(r'Error on $A_\lambda / A_{\rm V}$ (sigma)')
         axs[3,r].set_ylabel(r'$\Delta F / F$ (sigma)')
+
+        for ax in axs[:,r]:
+            ax.axvline(1.0, color='k', linestyle=':')
+
+        axs2[r].set_xlabel(r'$A_{\rm V}$')
+        axs2[r].set_ylabel('Density')
+        axs2[r].legend()
+        axs2[0].set_title('Training Data')
+        axs2[1].set_title('Validation Data')
 
         if name == 'val':
             axs[0,r].set_title('Validation Data')
