@@ -331,6 +331,12 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
         fig, axs = plt.subplots(1, 2, figsize=(15,4), sharex=True, sharey='row')
         axs = np.atleast_2d(axs)
 
+    # Find out whether we are saving A or log10A
+    fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+    with open(fname, 'r') as f:
+        header = f.readline().split()
+    target = header[-1]
+
     for i, name in enumerate(['train', 'val']):
 
         fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
@@ -341,7 +347,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
         rmse = np.sqrt(np.mean((ytrue - ypred) ** 2))
         print(f'\nRMSE {name}: %.3e'%rmse)
         
-        if args.fit_log:
+        if target == 'log10A':
             ypred = 10. ** ypred
             ytrue = 10. ** ytrue
 
@@ -435,6 +441,12 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
     out_dir = pjoin(args.fit_dir, run_name)
     fname = f'{out_dir}/{run_name}_fun.csv'
     df = pd.read_csv(fname, delimiter=';')
+
+    # Find out whether we are saving A or log10A
+    fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+    with open(fname, 'r') as f:
+        header = f.readline().split()
+    target = header[-1]
     
     if args.fit_log:
         print('\nTarget: log10A')
@@ -466,7 +478,8 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
         else:
             dF_F = np.full_like(ytrue, np.nan)
         
-        if args.fit_log:
+        # if args.fit_log:
+        if target == 'log10A':
             ytrue = 10. ** ytrue
             ypred = 10. ** ypred
 
@@ -949,6 +962,12 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         A_at_lv_2par = np.zeros(len(data['galaxy_id']))
         A_at_lv_4par = np.zeros(len(data['galaxy_id']))
 
+        # Find out whether we are saving A or log10A
+        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+        with open(fname, 'r') as f:
+            header = f.readline().split()
+        target = header[-1]
+
 
         for i in tqdm(range(len(data['galaxy_id']))):
 
@@ -1071,7 +1090,8 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             data = np.loadtxt(fname)
             ytrue = data[:,args.npar+1]
             ypred = data[:,args.npar+2]
-            if args.fit_log:
+            print(ytrue.shape, ypred.shape)
+            if target == 'log10A':
                 ypred = 10. ** ypred
                 ytrue = 10. ** ytrue
             fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')

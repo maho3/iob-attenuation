@@ -84,12 +84,29 @@ def run_operon(ini_file):
     use_names = names[:-1]
     print('Target:', names[-1])
     print('Fitting using parameters:', use_names)
-    
-    # Check arguments
-    if args.fit_log:
-        assert names[-1] == 'log10A', "Mismatch between config file target and that of file"
+
+    print(X.shape, y.shape, y.min(), y.max())
+
+    # If using log and the target is A, then convert to log10A
+    # Filter out the non-positive values
+    if args.fit_log and names[-1] == 'A':
+        pos_train = y > 0
+        pos_val = yval > 0
+        X_train_use = X[pos_train,:]
+        y_train_use = np.log10(y[pos_train])
+        X_val_use = Xval[pos_val,:]
+        y_val_use = np.log10(yval[pos_val])
     else:
-        assert names[-1] == 'A', "Mismatch between config file target and that of file"
+        X_train_use = X
+        y_train_use = y
+        X_val_use = Xval
+        y_val_use = yval
+    
+    # # Check arguments
+    # if args.fit_log:
+    #     assert names[-1] == 'log10A', "Mismatch between config file target and that of file"
+    # else:
+    #     assert names[-1] == 'A', "Mismatch between config file target and that of file"
 
     assert names == val_names, 'Training and validation data have different names'
 
@@ -111,7 +128,7 @@ def run_operon(ini_file):
             )
 
     print('Fitting')
-    reg.fit(X, y)
+    reg.fit(X_train_use, y_train_use)
     print(reg.get_model_string(reg.model_, 2))
     print(reg.stats_)
 
@@ -153,11 +170,18 @@ def run_operon(ini_file):
 
             y_pred_train = reg.evaluate_model(model, np.asfortranarray(X))
 
+            if args.fit_log and names[-1] != 'log10A':
+                y_pred_train = 10 ** y_pred_train
+
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
             if do_dF_F:
                 if args.fit_log:
-                    A_pred = 10 ** y_pred_train
-                    A_true = 10 ** y
+                    if names[-1] == 'log10A':
+                        A_pred = 10 ** y_pred_train
+                        A_true = 10 ** y
+                    else:
+                        A_pred = y_pred_train
+                        A_true = y
                 else:
                     A_pred = y_pred_train
                     A_true = y
@@ -182,11 +206,18 @@ def run_operon(ini_file):
                 medae_train_F = np.nan
 
             y_pred_val = reg.evaluate_model(model, np.asfortranarray(Xval))
+
+            if args.fit_log and names[-1] != 'log10A':
+                y_pred_val = 10 ** y_pred_val
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
             if do_dF_F:
                 if args.fit_log:
-                    A_pred = 10 ** y_pred_val
-                    A_true = 10 ** yval
+                    if names[-1] == 'log10A':
+                        A_pred = 10 ** y_pred_val
+                        A_true = 10 ** yval
+                    else:
+                        A_pred = y_pred_val
+                        A_true = yval
                 else:
                     A_pred = y_pred_val
                     A_true = yval
@@ -211,7 +242,11 @@ def run_operon(ini_file):
                 medae_val_F = np.nan
 
             to_print = [model_str, model.Length, r2_train, mse_train, medae_train_F, r2_val, mse_val, medae_val_F]
-            print(f'\n{to_print[1]}\n{to_print[0]}\n{to_print[2:]}')
+            # print(f'\n{to_print[1]}\n{to_print[0]}\n{to_print[2:]}')
+            print(f'\n{to_print[1]}\n{to_print[0]}')
+            print('MSE train, val:', to_print[3], to_print[6])
+            print('R2 train, val:', to_print[2], to_print[5])
+            print('MedAE dF/F train, val:', to_print[4], to_print[7])
             writer.writerow(to_print)
         
             output = np.vstack([X.T, y, y_pred_train, dF_F_train]).T

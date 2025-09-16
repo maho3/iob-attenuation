@@ -120,12 +120,16 @@ def get_data(ini_file):
         props_repeated = np.repeat(properties, nlam, axis=0)
         wavelengths_tiled = np.tile(lam_arr, ngal).reshape(-1, 1)
         curves_flat = data_set[attenuation_cols].values.reshape(-1, 1)
+        # if args.fit_log:
+        #     pos_m = np.squeeze(curves_flat > 0)
+        #     curves_flat[pos_m,:] = np.log10(curves_flat[pos_m,:])
+        #     curves_flat[~pos_m,:] = np.nan
         output_array = np.hstack((props_repeated, wavelengths_tiled, curves_flat))
         print(f'Saving {name.capitalize()} data of shape {output_array.shape} to {dirname} ...')
-        if args.fit_log:
-            header = ' '.join(in_cols + ['lam', 'log10A'])
-        else:
-            header = ' '.join(in_cols + ['lam', 'A'])
+        # if args.fit_log:
+        #     header = ' '.join(in_cols + ['lam', 'log10A'])
+        # else:
+        header = ' '.join(in_cols + ['lam', 'A'])
         outname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
         np.savetxt(outname, output_array, header=header, comments='')
 
