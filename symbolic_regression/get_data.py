@@ -19,20 +19,17 @@ def get_data(ini_file):
     print(data.head())
 
     # Get attenuation column names
+    to_norm = False
     if f'logA_{int(args.lambda_V*1e4)}A' in data.keys():
         attenuation_cols = [col for col in data.columns if re.match(r'logA_\d+A', col)]
         if not np.all(data[f'logA_{int(args.lambda_V*1e4)}A'] == 0):
             print('\tWarning: logA_V column is not all zeros: normalising data')
-            for col in attenuation_cols:
-                data[col] = data[col] - data[f'logA_{int(args.lambda_V*1e4)}A']
-            assert np.all(data[f'logA_{int(args.lambda_V*1e4)}A'] == 0), "Normalisation failed"
+            to_norm = True
     elif f'A_{int(args.lambda_V*1e4)}A' in data.keys():
         attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
         if not np.all(data[f'A_{int(args.lambda_V*1e4)}A'] == 1):
             print('\tWarning: A_V column is not all ones: normalising data')
-            for col in attenuation_cols:
-                data[col] = data[col] / data[f'A_{int(args.lambda_V*1e4)}A']
-            assert np.all(data[f'A_{int(args.lambda_V*1e4)}A'] == 1), "Normalisation failed"
+            to_norm = True
     else:
         raise ValueError("Column with lambda_V not found in input file")
 
@@ -116,19 +113,22 @@ def get_data(ini_file):
     for name, data_set in zip(['train', 'val', 'test'], [train_data, val_data, test_data]):
         ngal = len(data_set)
         nlam = len(lam_arr)
+        print(f'\nProcessing {name} data with {ngal} galaxies and {nlam} wavelengths...')
         properties = data_set[in_cols].values
         props_repeated = np.repeat(properties, nlam, axis=0)
         wavelengths_tiled = np.tile(lam_arr, ngal).reshape(-1, 1)
         curves_flat = data_set[attenuation_cols].values.reshape(-1, 1)
-        # if args.fit_log:
-        #     pos_m = np.squeeze(curves_flat > 0)
-        #     curves_flat[pos_m,:] = np.log10(curves_flat[pos_m,:])
-        #     curves_flat[~pos_m,:] = np.nan
+
+        if to_norm:
+            print('\tNormalising data...')
+            if f'logA_{int(args.lambda_V*1e4)}A' in data_set.keys():
+                curves_flat = curves_flat - np.repeat(data_set[f'logA_{int(args.lambda_V*1e4)}A'].values, nlam).reshape(-1, 1)
+            elif f'A_{int(args.lambda_V*1e4)}A' in data_set.keys():
+                curves_flat = curves_flat / np.repeat(data_set[f'A_{int(args.lambda_V*1e4)}A'].values, nlam).reshape(-1, 1)
+
         output_array = np.hstack((props_repeated, wavelengths_tiled, curves_flat))
         print(f'Saving {name.capitalize()} data of shape {output_array.shape} to {dirname} ...')
-        # if args.fit_log:
-        #     header = ' '.join(in_cols + ['lam', 'log10A'])
-        # else:
+
         header = ' '.join(in_cols + ['lam', 'A'])
         outname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
         np.savetxt(outname, output_array, header=header, comments='')
