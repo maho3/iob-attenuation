@@ -1,3 +1,3 @@
 #!/bin/bash
 
-addqueue -q cmb -s -n 1x24 -m 7.0 -c "Operon IOB 16" -e ./run.sh
+addqueue -q berg -s -n 1x28 -m 7.0 -c "Operon IOB 1" -e ./run.sh

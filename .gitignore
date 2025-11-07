@@ -180,3 +180,5 @@ data/iob_codes_plus_Acurve_with_ID_LOS.txt
 *.out
 *.sh.sh
 *galaxy_sr_optimization_results.csv
+
+symbolic_regression/old/
