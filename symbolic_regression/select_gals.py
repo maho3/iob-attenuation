@@ -269,42 +269,44 @@ def select_extremes(selected, G, edges, n_high, n_low, sfr_high_thresh, sfr_low_
         selected = pd.concat([selected, extremes], ignore_index=True)
         selected = selected.drop_duplicates(subset=["galaxy_id"], keep="first").reset_index(drop=True)
         after_n = selected["galaxy_id"].nunique()
-        print(f"Added {after_n - before_n} extreme galaxies (target 30).")
+        print(f"Added {after_n - before_n} extreme galaxies.")
     else:
         print("No candidates found for extremes under current thresholds.")
 
     return selected, extremes
 
 
-def get_attenuation_curves(df, selected, seed=12345):
+def get_attenuation_curves(df, selected_gals, seed=12345):
     """
     Extract attenuation curves for selected galaxies. One line-of-sight (LOS) per galaxy is chosen randomly.
 
     Args:
         :df (pd.DataFrame): Original DataFrame with all LOS data.
-        :selected (pd.DataFrame): DataFrame of selected galaxies.
+        :selected_gals (np.array): Array of selected galaxy IDs.
         :seed (int): Random seed for reproducibility.
 
     Returns:
         :df_final (pd.DataFrame): DataFrame with one LOS per selected galaxy.
     """
-
-    selected_gals = selected['galaxy_id']
     
     # For each gal in selected, extract one los randomly and save its attenuation curve
     df_final = pd.DataFrame()
-    rng = np.random.default_rng(seed)
+    
+    if seed is not None:
+        np.random.seed(seed)
+
     for gid in tqdm(selected_gals):
         gal_df = df[df['galaxy_id'] == gid]
         if gal_df.empty:
             continue
         los_indices = gal_df.index.to_numpy()
-        chosen_idx = rng.choice(los_indices)
+        chosen_idx = np.random.choice(los_indices, size=1)[0]
 
         # Add all columns for the chosen LOS
         df_final = pd.concat([df_final, gal_df.loc[[chosen_idx]]], axis=0)
 
     return df_final
+
 
 def plot_precut_av(df):
     """
@@ -498,16 +500,16 @@ def plot_iob_distributions(df, df_final):
     return
 
 
-def select_gals(infile, exclude_file):
+def select_gals_laura(selection_args):
 
-    df = load_df(infile)
+    print('\nSelecting galaxies using Laura\'s method...\n')
+
+    df = load_df(selection_args.in_file)
 
     plot_precut_av(df)
-    
-    df_exclude = pd.read_csv(exclude_file, sep="\t")
+
+    df_exclude = pd.read_csv(selection_args.exclude_file, sep="\t")
     ids_to_exclude = df_exclude['galaxy_id'].unique()
-    print(f"Excluding {len(ids_to_exclude)} galaxies from previous selections.")
-    df = df[~df['galaxy_id'].isin(ids_to_exclude)].reset_index(drop=True)
 
     CHECK_START   = 61   # inclusive
     CHECK_END     = 70   # inclusive
@@ -516,35 +518,99 @@ def select_gals(infile, exclude_file):
     df = check_inconsistency(df, cols_to_check)
     print(df['galaxy_id'].nunique(), "unique galaxies after inconsistency check.")
 
-    # Select galaxies using adaptive bins in logMstar
-    selected, G, edges = select_adaptive_bins(df, 3, 30, 15)
-    plot_postcut_av(df, selected)
+    df_orig = df.copy()
 
-    # Select some extremes based on Av and Sigma_SFR
-    n_high = 24
-    n_low  = 6
-    sfr_high_thresh = 1e-1
-    sfr_low_thresh  = 1e-3
-    q_high = 0.84
-    q_low  = 0.20
-    rng_seed = 42
-    selected, extremes = select_extremes(selected, G, edges, n_high, n_low, sfr_high_thresh, sfr_low_thresh, q_high, q_low, rng_seed=rng_seed)
+    all_selected_gals = []
 
-    plot_postcutplus_av(df, selected, extremes)
+    for t, n in zip(['Train', 'Val', 'Test'], [selection_args.ntrain, selection_args.nval, selection_args.ntest]):
 
-    df_final = get_attenuation_curves(df, selected, seed=12345)
+        print(f"\n--- Selecting {t} set ({n} galaxies) ---")
 
-    plot_iob_distributions(df, df_final)
+        print(f"Excluding {len(ids_to_exclude)} galaxies from previous selections.")
+        df = df[~df['galaxy_id'].isin(ids_to_exclude)].reset_index(drop=True)
 
-    # Check that none of the galaxy ids match those from the exclude file
-    final_ids = set(df_final['galaxy_id'].unique())
-    overlap_ids = final_ids.intersection(set(ids_to_exclude))
-    if overlap_ids:
-        raise RuntimeError(f"Selected galaxies include excluded IDs: {overlap_ids}")
+        # Compute n_per_bin based on desired total number of galaxies
+        n_high = int(n * selection_args.frac_high)
+        n_low  = int(n * selection_args.frac_low)
+        nselect = n - n_high - n_low
+        nbins_max = selection_args.nbins_max
+        n_per_bin = max(1, nselect // nbins_max)
+        print(f"Selecting approximately {nselect} galaxies using up to {nbins_max} bins (~{n_per_bin} per bin).")
 
-    return None
+        # Select galaxies using adaptive bins in logMstar
+        selected, G, edges = select_adaptive_bins(df, 
+                                                selection_args.min_per_bin_mult, 
+                                                selection_args.nbins_max, 
+                                                n_per_bin)
+        if t == 'Train':
+            plot_postcut_av(df, selected)
 
-if __name__ == "__main__":
-    infile = "../data/gal_los_iobcomp_attcurve_galprop.dat"
-    exclude_file = '../data/selected_galaxy_ids_by_logMstar_bin_with_extremes.txt'
-    df = select_gals(infile, exclude_file)
+        # Select some extremes based on Av and Sigma_SFR
+        sfr_high_thresh = selection_args.sfr_high_thresh
+        sfr_low_thresh  = selection_args.sfr_low_thresh
+        q_high = selection_args.q_high
+        q_low  = selection_args.q_low
+        rng_seed = selection_args.extreme_seed
+        selected, extremes = select_extremes(selected, G, edges, n_high, n_low, sfr_high_thresh, sfr_low_thresh, q_high, q_low, rng_seed=rng_seed)
+
+        if t == 'Train':
+            plot_postcutplus_av(df, selected, extremes)
+
+        all_selected_gals.append(selected['galaxy_id'].to_numpy().copy())
+
+        # Update ids_to_exclude for next iteration
+        ids_to_exclude = np.concatenate([ids_to_exclude, selected['galaxy_id'].to_numpy()])
+
+    # Join the selected gals to make this called once
+    selected_gals = np.concatenate(all_selected_gals)
+    df_final = get_attenuation_curves(df_orig, selected_gals, seed=selection_args.rng_seed)
+
+    # Now split df_final into Train/Val/Test based on all_selected_gals
+    train_ids, val_ids, test_ids = all_selected_gals
+    df_train = df_final[df_final['galaxy_id'].isin(train_ids)].copy()
+    df_val   = df_final[df_final['galaxy_id'].isin(val_ids)].copy()
+    df_test  = df_final[df_final['galaxy_id'].isin(test_ids)].copy()
+
+    return df_train, df_val, df_test
+
+
+def select_gals_random(selection_args):
+
+    print('\nSelecting galaxies using random selection method...\n')
+
+    df = load_df(selection_args.in_file)
+
+    df_exclude = pd.read_csv(selection_args.exclude_file, sep="\t")
+    ids_to_exclude = df_exclude['galaxy_id'].unique()
+
+    df_orig = df.copy()
+
+    all_selected_gals = []
+    np.random.seed(selection_args.rng_seed)
+
+    for t, n in zip(['Train', 'Val', 'Test'], [selection_args.ntrain, selection_args.nval, selection_args.ntest]):
+
+        print(f"\n--- Selecting {t} set ({n} galaxies) ---")
+
+        df = df[~df['galaxy_id'].isin(ids_to_exclude)].reset_index(drop=True)
+
+        # Get unique galaxy ids
+        galaxy_ids = df['galaxy_id'].unique()
+        print(f"Number of unique galaxies available for selection: {len(galaxy_ids)}")
+        np.random.shuffle(galaxy_ids)
+        all_selected_gals.append(galaxy_ids[:n])
+
+        # Update ids_to_exclude for next iteration
+        ids_to_exclude = np.concatenate([ids_to_exclude, all_selected_gals[-1]])
+
+    # Join the selected gals to make this called once
+    selected_gals = np.concatenate(all_selected_gals)
+    df_final = get_attenuation_curves(df_orig, selected_gals, seed=selection_args.rng_seed)
+
+    # Now split df_final into Train/Val/Test based on all_selected_gals
+    train_ids, val_ids, test_ids = all_selected_gals
+    df_train = df_final[df_final['galaxy_id'].isin(train_ids)].copy()
+    df_val   = df_final[df_final['galaxy_id'].isin(val_ids)].copy()
+    df_test  = df_final[df_final['galaxy_id'].isin(test_ids)].copy()
+
+    return df_train, df_val, df_test

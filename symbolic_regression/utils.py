@@ -1,5 +1,7 @@
 import configparser
 import ast
+import os
+from os.path import join as pjoin
 
 class OperonArgs(object):
     """
@@ -35,20 +37,20 @@ class OperonArgs(object):
     
     def __init__(self, ini_file, verbose=True):
         
-        if verbose: print(f"\nReading from configuration file: {ini_file}")
+        if verbose: 
+            print(f"\nReading from configuration file: {ini_file}")
+        if not os.path.isfile(ini_file):
+            raise FileNotFoundError(f"Configuration file '{ini_file}' not found.")
         config = configparser.ConfigParser()
         config.read(ini_file)
         
-        self.input_file = config['system']['input_file']
-        self.data_dir = config['system']['data_dir']
+        self.sr_data_dir = config['system']['sr_data_dir']
         self.fit_dir = config['system']['fit_dir']
         self.version_num = int(config['system']['version_num'])
-        
-        self.in_param = config['data']['in_param']
-        self.seed = int(config['data']['seed'])
-        self.ntrain = int(config['data']['ntrain'])
-        self.nval = int(config['data']['nval'])
-        self.ntest = int(config['data']['ntest'])
+
+        self.selection_conf = config['system']['selection_conf']
+        self.selection = SelectionArgs(self.selection_conf, verbose=verbose)
+
         self.lambda_V = float(config['data']['lambda_v'])
         self.npar = int(config['data']['npar'])
         self.fit_log = bool(config['data']['fit_log'].strip().lower() == 'true')
@@ -68,3 +70,110 @@ class OperonArgs(object):
         self.objectives = list(ast.literal_eval(config['operon']['objectives']))
         self.max_evaluations = int(float(config['operon']['max_evaluations']))
         self.generations = int(float(config['operon']['generations']))
+
+        # These files contain only those properties needed for symbolic regression
+        self.train_sr_input_file = pjoin(self.sr_data_dir, f'train_sr_input_v{self.version_num}.csv')
+        self.val_sr_input_file = pjoin(self.sr_data_dir, f'val_sr_input_v{self.version_num}.csv')
+        self.test_sr_input_file = pjoin(self.sr_data_dir, f'test_sr_input_v{self.version_num}.csv')
+
+    @property
+    def ntrain(self):
+        """Number of training examples from selection configuration"""
+        return self.selection.ntrain
+    
+    @property
+    def nval(self):
+        """Number of validation examples from selection configuration"""
+        return self.selection.nval
+    
+    @property
+    def ntest(self):
+        """Number of test examples from selection configuration"""
+        return self.selection.ntest
+    
+    @property
+    def data_dir(self):
+        """Directory where the data is stored"""
+        return self.selection.data_dir
+
+    @property
+    def in_param(self):
+        """Input parameter for selection"""
+        return self.selection.in_param
+
+
+class SelectionArgs(object):
+    """
+    Class to store information from ini file to be passed to galaxy selection functions
+    
+    This object has the following attributes:
+    
+        :data_dir (str): The directory where the data are stored
+        :version_num (int): The number of the version considered
+        :in_file (str): The name of the input data file
+        :exclude_file (str): The name of the file containing galaxy ids to exclude from selection
+        :method (str): The method to use for galaxy selection
+        :ntrain (int): The number of training galaxies to select
+        :nval (int): The number of validation galaxies to select
+        :ntest (int): The number of test galaxies to select
+        :rng_seed (int): Seed to use for shuffling when selecting galaxies
+
+    For the method "laura", the following additional attributes are defined:
+        :min_per_bin_mult (int): Minimum number of galaxies per bin multiplier
+        :nbins_max (int): Maximum number of bins
+        :n_per_bin (int): Number of galaxies per bin
+        :n_high (int): Number of high SFR galaxies to select
+        :n_low (int): Number of low SFR galaxies to select
+        :sfr_high_thresh (float): Threshold for high SFR galaxies
+        :sfr_low_thresh (float): Threshold for low SFR galaxies
+        :q_high (float): Quantile for high mass galaxies
+        :q_low (float): Quantile for low mass galaxies
+
+    Args:
+        :ini_file (str): The name of the file to be read by `configparser` containing the run's information
+        :verbose (bool, default=True): Whether to print status
+
+    """
+
+    def __init__(self, ini_file, verbose=True):
+        
+        if verbose: 
+            print(f"\nReading from configuration file: {ini_file}")
+        if not os.path.isfile(ini_file):
+            raise FileNotFoundError(f"Configuration file '{ini_file}' not found.")
+        config = configparser.ConfigParser()
+        config.read(ini_file)
+        
+        self.in_data_dir = config['system']['in_data_dir']
+        self.out_data_dir = config['system']['out_data_dir']
+        self.version_num = int(config['system']['version_num'])
+        self.in_file = pjoin(self.in_data_dir, config['system']['in_file'])
+        self.exclude_file = pjoin(self.in_data_dir, config['system']['exclude_file'])
+
+        self.in_param = config['data']['in_param']
+
+        # These files contain all properties of the chosen galaxies
+        self.train_file = pjoin(self.out_data_dir, f'train_data_v{self.version_num}.csv')
+        self.val_file = pjoin(self.out_data_dir, f'val_data_v{self.version_num}.csv')
+        self.test_file = pjoin(self.out_data_dir, f'test_data_v{self.version_num}.csv')
+
+
+        self.method = config['selection']['method'].lower()
+        self.ntrain = int(config['selection']['ntrain'])
+        self.nval = int(config['selection']['nval'])
+        self.ntest = int(config['selection']['ntest'])
+        self.rng_seed = int(config['selection']['rng_seed'])
+
+        if self.method == 'laura':
+            self.min_per_bin_mult = int(config['laura']['min_per_bin_mult'])
+            self.nbins_max = int(config['laura']['nbins_max'])
+            self.frac_high = float(config['laura']['frac_high'])
+            self.frac_low = float(config['laura']['frac_low'])
+            self.sfr_high_thresh = float(config['laura']['sfr_high_thresh'])
+            self.sfr_low_thresh = float(config['laura']['sfr_low_thresh'])
+            self.q_high = float(config['laura']['q_high'])
+            self.q_low = float(config['laura']['q_low'])
+            self.extreme_seed = int(config['laura']['extreme_seed'])
+
+        if self.method not in ['laura', 'random']:
+            raise ValueError(f"Selection method '{self.method}' not recognised. Available methods are 'laura' and 'random'.")
