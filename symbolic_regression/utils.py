@@ -57,8 +57,8 @@ class OperonArgs(object):
         self.lam_max = float(config['data']['lam_max'])
         self.lam_min = float(config['data']['lam_min'])
 
-        val = config['data'].get('lambda_trans')
-        self.lambda_trans = float(val) if val is not None else None
+        val = config['data'].get('lam_trans')
+        self.lam_trans = float(val) if val is not None else None
 
         val = config['data'].get('f_subsample')
         self.f_subsample = int(val) if val is not None else None
@@ -92,9 +92,14 @@ class OperonArgs(object):
         return self.selection.ntest
     
     @property
-    def data_dir(self):
-        """Directory where the data is stored"""
-        return self.selection.data_dir
+    def in_data_dir(self):
+        """Directory where the input data is stored"""
+        return self.selection.in_data_dir
+    
+    @property
+    def out_data_dir(self):
+        """Directory where the output data is stored"""
+        return self.selection.out_data_dir
 
     @property
     def in_param(self):
