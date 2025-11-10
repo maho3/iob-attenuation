@@ -367,26 +367,27 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
         all_perc = [34+13.5+2.35, 34+13.5, 34]
         all_perc = all_perc[1:]
         for j, delta in enumerate(all_perc):
-            low = np.percentile(all_frac_res, 50 - delta, axis=0) 
-            high = np.percentile(all_frac_res, 50 + delta, axis=0)
+            low = np.nanpercentile(all_frac_res, 50 - delta, axis=0) 
+            high = np.nanpercentile(all_frac_res, 50 + delta, axis=0)
             print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
             axs[0,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
-        axs[0,i].plot(lam, np.median(all_frac_res, axis=0), color='k')
-        rmse = np.sqrt(np.mean((all_frac_res) ** 2))
+        axs[0,i].plot(lam, np.nanmedian(all_frac_res, axis=0), color='k')
+        rmse = np.sqrt(np.nanmean((all_frac_res) ** 2))
         print("\t\tRMSE:", rmse)
-        rmae = np.mean(np.abs(all_frac_res))
+        rmae = np.nanmean(np.abs(all_frac_res))
         print("\t\tRMAE:", rmae)
 
         if do_dF_F:
             dF_F = data[:,args.npar+3]
             dF_F = dF_F.reshape(-1, len(lam))
             for j, delta in enumerate(all_perc):
-                low = np.percentile(dF_F, 50 - delta, axis=0) 
-                high = np.percentile(dF_F, 50 + delta, axis=0)
+                low = np.nanpercentile(dF_F, 50 - delta, axis=0) 
+                high = np.nanpercentile(dF_F, 50 + delta, axis=0)
                 print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
                 axs[1,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
-            axs[1,i].plot(lam, np.median(dF_F, axis=0), color='k')
-            print("Median absolute DF/F", np.median(np.abs(dF_F)))
+            axs[1,i].plot(lam, np.nanmedian(dF_F, axis=0), color='k')
+            print("Median absolute DF/F", np.nanmedian(np.abs(dF_F)))
+            print("RMSE DF/F", np.sqrt(np.nanmean(dF_F ** 2)))
 
         axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
 

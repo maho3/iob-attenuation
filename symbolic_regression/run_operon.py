@@ -92,6 +92,8 @@ def run_operon(ini_file):
         train_Av_use = train_Av[pos_train]
         val_Av_use = val_Av[pos_val]
     else:
+        pos_train = np.ones(y.shape[0], dtype=bool)
+        pos_val = np.ones(yval.shape[0], dtype=bool)
         X_train_use = X
         y_train_use = y
         X_val_use = Xval
@@ -157,10 +159,7 @@ def run_operon(ini_file):
         writer.writerow(["Equation", "Length", "R2_train", "MSE_train", "MedAE_train_F", "R2_val", "MSE_val", "MedAE_val_F"])
         for model, model_str in res:
 
-            y_pred_train = reg.evaluate_model(model, np.asfortranarray(X_train_use))
-
-            if args.fit_log:
-                y_pred_train = 10 ** y_pred_train
+            y_pred_train = reg.evaluate_model(model, np.asfortranarray(X))
 
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
             if args.fit_log:
@@ -168,16 +167,16 @@ def run_operon(ini_file):
                 A_true = 10 ** y_train_use
             else:
                 A_pred = y_pred_train
-                A_true = y
-            dF_F_train = 10. ** (0.4 * train_Av * (A_true - A_pred)) - 1.0
+                A_true = y_train_use
+            dF_F_train = 10. ** (0.4 * train_Av_use * (A_true - A_pred[pos_train])) - 1.0
 
             try:
-                mse_train = mse(y_train_use, y_pred_train)
+                mse_train = mse(y_train_use, y_pred_train[pos_train])
             except:
                 print('Error calculating train mse for model:', model.Length)
                 mse_train = np.nan
             try:
-                r2_train = r2_score(y_train_use, y_pred_train)
+                r2_train = r2_score(y_train_use, y_pred_train[pos_train])
             except:
                 print('Error calculating train r2 for model:', model.Length)
                 r2_train = np.nan
@@ -187,26 +186,24 @@ def run_operon(ini_file):
                 print('Error calculating train MedAE for model:', model.Length)
                 medae_train_F = np.nan
 
-            y_pred_val = reg.evaluate_model(model, np.asfortranarray(X_val_use))
+            y_pred_val = reg.evaluate_model(model, np.asfortranarray(Xval))
 
-            if args.fit_log:
-                y_pred_val = 10 ** y_pred_val
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
             if args.fit_log:
                 A_pred = 10 ** y_pred_val
                 A_true = 10 ** y_val_use
             else:
                 A_pred = y_pred_val
-                A_true = yval
-            dF_F_val = 10. ** (0.4 * val_Av * (A_true - A_pred)) - 1.0
+                A_true = y_val_use
+            dF_F_val = 10. ** (0.4 * val_Av_use * (A_true - A_pred[pos_val])) - 1.0
 
             try:
-                mse_val = mse(y_val_use, y_pred_val)
+                mse_val = mse(y_val_use, y_pred_val[pos_val])
             except:
                 print('Error calculating val mse for model:', model.Length)
                 mse_val = np.nan
             try:
-                r2_val = r2_score(y_val_use, y_pred_val)
+                r2_val = r2_score(y_val_use, y_pred_val[pos_val])
             except:
                 print('Error calculating val r2 for model:', model.Length)
                 r2_val = np.nan
@@ -224,8 +221,20 @@ def run_operon(ini_file):
             print('MedAE dF/F train, val:', to_print[4], to_print[7])
             writer.writerow(to_print)
         
-            output = np.vstack([X_train_use.T, y_train_use, y_pred_train, dF_F_train]).T
-            output_val = np.vstack([X_val_use.T, y_val_use, y_pred_val, dF_F_val]).T
+
+            # Insert np.nan into missing positions in dF_F arrays
+            dF_F_train_full = np.full(y.shape[0], np.nan)
+            dF_F_train_full[pos_train] = dF_F_train
+            dF_F_val_full = np.full(yval.shape[0], np.nan)
+            dF_F_val_full[pos_val] = dF_F_val
+
+            # Exponenitate if needed
+            if args.fit_log:
+                y_pred_train = 10. ** y_pred_train
+                y_pred_val = 10. ** y_pred_val
+
+            output = np.vstack([X.T, y, y_pred_train, dF_F_train_full]).T
+            output_val = np.vstack([Xval.T, yval, y_pred_val, dF_F_val_full]).T
             np.savetxt(f'{outname_pred_train}_{model.Length}.csv', output)
             np.savetxt(f'{outname_pred_val}_{model.Length}.csv', output_val)
 
