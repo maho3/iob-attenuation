@@ -9,6 +9,7 @@ from utils import OperonArgs
 from os.path import join as pjoin
 import argparse
 import pandas as pd
+import warnings
 
 def run_operon(ini_file):
     """
@@ -26,89 +27,77 @@ def run_operon(ini_file):
     """
     
     args = OperonArgs(ini_file)
+    target_name = 'A'
     
     # Load training and validation data
-    dirname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}')
+    dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
     fname_train = pjoin(dirname, f'{args.in_param}_train_data.txt')
     fname_val = pjoin(dirname, f'{args.in_param}_val_data.txt')
-    fname_train_id = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_galaxy_ids_los.txt')
-    fname_val_id = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_val_galaxy_ids_los.txt')
+    df_train = pd.read_csv(fname_train, sep=r'\s+')
+    df_val = pd.read_csv(fname_val, sep=r'\s+')
 
-    with open(fname_train, 'r') as f:
-        names = f.readline().strip().split()
-    data = np.loadtxt(fname_train, skiprows=1)
-    X = data[:,:-1]
-    y = data[:,-1]
-    train_id, train_los = np.loadtxt(fname_train_id, dtype=float, unpack=True, skiprows=1)
+    in_cols = [col for col in df_train.columns if col.startswith(args.in_param.upper()) and col[len(args.in_param):].isdigit()]
+    in_cols += ['lam']
+    print('Input columns:', in_cols)
 
-    with open(fname_val, 'r') as f:
-        val_names = f.readline().strip().split()
-    data = np.loadtxt(fname_val, skiprows=1)
-    Xval = data[:,:-1]
-    yval = data[:,-1]
-    val_id, val_los = np.loadtxt(fname_val_id, dtype=float, unpack=True, skiprows=1)
+    X = df_train[in_cols].values
+    y = df_train[target_name].values
+    Xval = df_val[in_cols].values
+    yval = df_val[target_name].values
 
     # Get the normalisation of the curves
-    data = pd.read_csv(args.input_file, sep='\t',)
-    if f'logA_{int(args.lambda_V*1e4)}A' in data.keys():
-        lv_key = f'logA_{int(args.lambda_V*1e4)}A'
-    elif f'A_{int(args.lambda_V*1e4)}A' in data.keys():
-        lv_key = f'A_{int(args.lambda_V*1e4)}A'
+    df_all_train = pd.read_csv(args.selection.train_file)
+    df_all_val = pd.read_csv(args.selection.val_file)
+    log_Av_col = f'logA_{int(args.lambda_V*1e4)}A'
+    A_v_col = f'A_{int(args.lambda_V*1e4)}A'
+    if log_Av_col in df_all_train.columns:
+        lv_key = log_Av_col
+    elif A_v_col in df_all_train.columns:
+        lv_key = A_v_col
     else:
         raise ValueError("Column with lambda_V not found in input file")
     
     # Get A_v for training and validation sets so we can calculate dF/F after fitting
-    data['_key'] = list(zip(data['galaxy_id'], data['los']))
-    data = data.drop_duplicates('_key', keep='first')
-    target_pairs = list(zip(train_id, train_los))
-    filtered = data[data['_key'].isin(target_pairs)]
-    ordered_train = filtered.set_index('_key').loc[target_pairs].reset_index(drop=True)
-    train_Av = ordered_train[lv_key].values
-    target_pairs = list(zip(val_id, val_los))
-    filtered = data[data['_key'].isin(target_pairs)]
-    ordered_val = filtered.set_index('_key').loc[target_pairs].reset_index(drop=True)
-    val_Av = ordered_val[lv_key].values
+    train_id = df_train['galaxy_id'].values
+    train_los = df_train['los'].values
+    val_id = df_val['galaxy_id'].values
+    val_los = df_val['los'].values
+    m = df_all_train.set_index(['galaxy_id', 'los'])
+    train_Av = m.loc[list(zip(train_id, train_los)), lv_key].values
+    m = df_all_val.set_index(['galaxy_id', 'los'])
+    val_Av = m.loc[list(zip(val_id, val_los)), lv_key].values
+
     if 'logA' in lv_key:
         train_Av = 10 ** train_Av
         val_Av = 10 ** val_Av
     if np.all(train_Av == 1) or np.all(val_Av == 1):
-        print('Warning: Av is 1 everywhere. Will not calculate dF/F.')
-        do_dF_F = False
-    else:
-        do_dF_F = True
-    train_Av = np.repeat(train_Av, X.shape[0] // train_Av.shape[0], axis=0)
-    val_Av = np.repeat(val_Av, Xval.shape[0] // val_Av.shape[0], axis=0)
+        warnings.warn('Av is 1 everywhere')
     assert train_Av.shape[0] == X.shape[0], "Mismatch in training Av and X shape"
     assert val_Av.shape[0] == Xval.shape[0], "Mismatch in validation Av and X shape"
 
-    use_names = names[:-1]
-    print('Target:', names[-1])
-    print('Fitting using parameters:', use_names)
+    print('Target:', target_name)
+    print('Fitting using parameters:', in_cols)
 
     print(X.shape, y.shape, y.min(), y.max())
 
     # If using log and the target is A, then convert to log10A
     # Filter out the non-positive values
-    if args.fit_log and names[-1] == 'A':
+    if args.fit_log and target_name == 'A':
         pos_train = y > 0
         pos_val = yval > 0
         X_train_use = X[pos_train,:]
         y_train_use = np.log10(y[pos_train])
         X_val_use = Xval[pos_val,:]
         y_val_use = np.log10(yval[pos_val])
+        train_Av_use = train_Av[pos_train]
+        val_Av_use = val_Av[pos_val]
     else:
         X_train_use = X
         y_train_use = y
         X_val_use = Xval
         y_val_use = yval
-    
-    # # Check arguments
-    # if args.fit_log:
-    #     assert names[-1] == 'log10A', "Mismatch between config file target and that of file"
-    # else:
-    #     assert names[-1] == 'A', "Mismatch between config file target and that of file"
-
-    assert names == val_names, 'Training and validation data have different names'
+        train_Av_use = train_Av
+        val_Av_use = val_Av
 
     reg = SymbolicRegressor(
             allowed_symbols=args.allowed_symbols,
@@ -159,7 +148,7 @@ def run_operon(ini_file):
     # File for names of parameters
     with open(f'{out_dir}/{run_name}_names.txt', 'w') as f:
         writer = csv.writer(f, delimiter='\t')
-        writer.writerow(use_names)
+        writer.writerow(in_cols + [target_name])
 
     res = [(s['tree'],  s['model']) for s in reg.pareto_front_]
 
@@ -168,77 +157,63 @@ def run_operon(ini_file):
         writer.writerow(["Equation", "Length", "R2_train", "MSE_train", "MedAE_train_F", "R2_val", "MSE_val", "MedAE_val_F"])
         for model, model_str in res:
 
-            y_pred_train = reg.evaluate_model(model, np.asfortranarray(X))
+            y_pred_train = reg.evaluate_model(model, np.asfortranarray(X_train_use))
 
-            if args.fit_log and names[-1] != 'log10A':
+            if args.fit_log:
                 y_pred_train = 10 ** y_pred_train
 
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
-            if do_dF_F:
-                if args.fit_log:
-                    if names[-1] == 'log10A':
-                        A_pred = 10 ** y_pred_train
-                        A_true = 10 ** y
-                    else:
-                        A_pred = y_pred_train
-                        A_true = y
-                else:
-                    A_pred = y_pred_train
-                    A_true = y
-                dF_F_train = 10. ** (0.4 * train_Av * (A_true - A_pred)) - 1.0
+            if args.fit_log:
+                A_pred = 10 ** y_pred_train
+                A_true = 10 ** y_train_use
             else:
-                dF_F_train = np.full_like(y_pred_train, np.nan)
+                A_pred = y_pred_train
+                A_true = y
+            dF_F_train = 10. ** (0.4 * train_Av * (A_true - A_pred)) - 1.0
 
             try:
-                mse_train = mse(y, y_pred_train)
+                mse_train = mse(y_train_use, y_pred_train)
             except:
+                print('Error calculating train mse for model:', model.Length)
                 mse_train = np.nan
             try:
-                r2_train = r2_score(y, y_pred_train)
+                r2_train = r2_score(y_train_use, y_pred_train)
             except:
+                print('Error calculating train r2 for model:', model.Length)
                 r2_train = np.nan
-            if do_dF_F:
-                try:
-                    medae_train_F = float(np.median(np.abs(dF_F_train)))
-                except:
-                    medae_train_F = np.nan
-            else:
+            try:
+                medae_train_F = float(np.median(np.abs(dF_F_train)))
+            except:
+                print('Error calculating train MedAE for model:', model.Length)
                 medae_train_F = np.nan
 
-            y_pred_val = reg.evaluate_model(model, np.asfortranarray(Xval))
+            y_pred_val = reg.evaluate_model(model, np.asfortranarray(X_val_use))
 
-            if args.fit_log and names[-1] != 'log10A':
+            if args.fit_log:
                 y_pred_val = 10 ** y_pred_val
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
-            if do_dF_F:
-                if args.fit_log:
-                    if names[-1] == 'log10A':
-                        A_pred = 10 ** y_pred_val
-                        A_true = 10 ** yval
-                    else:
-                        A_pred = y_pred_val
-                        A_true = yval
-                else:
-                    A_pred = y_pred_val
-                    A_true = yval
-                dF_F_val = 10. ** (0.4 * val_Av * (A_true - A_pred)) - 1.0
+            if args.fit_log:
+                A_pred = 10 ** y_pred_val
+                A_true = 10 ** y_val_use
             else:
-                dF_F_val = np.full_like(y_pred_val, np.nan)
+                A_pred = y_pred_val
+                A_true = yval
+            dF_F_val = 10. ** (0.4 * val_Av * (A_true - A_pred)) - 1.0
 
             try:
-                mse_val = mse(yval, y_pred_val)
+                mse_val = mse(y_val_use, y_pred_val)
             except:
+                print('Error calculating val mse for model:', model.Length)
                 mse_val = np.nan
             try:
-                r2_val = r2_score(yval, y_pred_val)
+                r2_val = r2_score(y_val_use, y_pred_val)
             except:
+                print('Error calculating val r2 for model:', model.Length)
                 r2_val = np.nan
-            if do_dF_F:
-                try:
-                    medae_val_F = float(np.median(np.abs(dF_F_val)))
-                except:
-                    medae_val_F = np.nan
-            else:
+            try:
+                medae_val_F = float(np.median(np.abs(dF_F_val)))
+            except:
+                print('Error calculating val MedAE for model:', model.Length)
                 medae_val_F = np.nan
 
             to_print = [model_str, model.Length, r2_train, mse_train, medae_train_F, r2_val, mse_val, medae_val_F]
@@ -249,8 +224,8 @@ def run_operon(ini_file):
             print('MedAE dF/F train, val:', to_print[4], to_print[7])
             writer.writerow(to_print)
         
-            output = np.vstack([X.T, y, y_pred_train, dF_F_train]).T
-            output_val = np.vstack([Xval.T, yval, y_pred_val, dF_F_val]).T
+            output = np.vstack([X_train_use.T, y_train_use, y_pred_train, dF_F_train]).T
+            output_val = np.vstack([X_val_use.T, y_val_use, y_pred_val, dF_F_val]).T
             np.savetxt(f'{outname_pred_train}_{model.Length}.csv', output)
             np.savetxt(f'{outname_pred_val}_{model.Length}.csv', output_val)
 

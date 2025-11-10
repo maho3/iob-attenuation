@@ -332,7 +332,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
         axs = np.atleast_2d(axs)
 
     # Find out whether we are saving A or log10A
-    fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+    fname = pjoin(args.selection.train_file)
     with open(fname, 'r') as f:
         header = f.readline().split()
     target = header[-1]
@@ -351,13 +351,14 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
             ypred = 10. ** ypred
             ytrue = 10. ** ytrue
 
-        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
-        with open(fname, 'r') as f:
-            header = f.readline().split()
-        lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
+        dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
+        fname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
+        df = pd.read_csv(fname, delimiter=r'\s+')
+        lam = np.unique(df['lam'].values)
 
-        all_frac_res = [None] * getattr(args, f'n{name}')
-        for j in range(getattr(args, f'n{name}')):
+        n = ypred.shape[0] // len(lam)
+        all_frac_res = [None] * n
+        for j in range(n):
             if plot_frac_error:
                 all_frac_res[j] = ypred[j*len(lam):(j+1)*len(lam)] / ytrue[j*len(lam):(j+1)*len(lam)] - 1
             else:
@@ -405,10 +406,10 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
         axs[1,0].set_ylabel(r'$\Delta F/F$')
         axs[1,1].set_ylabel(r'$\Delta F/F$')
 
-    if args.lambda_trans is not None and args.f_subsample is not None:
-        lambda_trans = args.lambda_trans / args.lambda_V
+    if args.lam_trans is not None and args.f_subsample is not None:
+        lam_trans = args.lam_trans / args.lambda_V
         for ax in axs.flatten():
-            ax.axvline(lambda_trans, color='k', linestyle=':')
+            ax.axvline(lam_trans, color='k', linestyle=':')
     
     fig.align_labels()
     fig.tight_layout()
@@ -443,8 +444,7 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
     df = pd.read_csv(fname, delimiter=';')
 
     # Find out whether we are saving A or log10A
-    fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
-    with open(fname, 'r') as f:
+    with open(args.selection.train_file, 'r') as f:
         header = f.readline().split()
     target = header[-1]
     
@@ -484,13 +484,15 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
             ypred = 10. ** ypred
 
         # Get the galaxy ids and the los
-        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_{name}_galaxy_ids_los.txt')
-        all_gal_id, all_los = np.loadtxt(fname, dtype=float, unpack=True, skiprows=1)
+        fname = args.selection.train_file if name == 'train' else args.selection.val_file
+        df = pd.read_csv(fname)
+        all_gal_id = df['galaxy_id'].values
+        all_los = df['los'].values
         
-        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
-        with open(fname, 'r') as f:
-            header = f.readline().split()
-        lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
+        dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
+        fname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
+        df = pd.read_csv(fname, delimiter=r'\s+')
+        lam = np.unique(df['lam'].values)
         
         # ytrue here is A
         for j in range(offset, offset+nexamples):
@@ -524,11 +526,11 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
     axs[0,0].set_title('Training')
     axs[0,1].set_title('Validation')
 
-    if args.lambda_trans is not None and args.f_subsample is not None:
-        lambda_trans = args.lambda_trans / args.lambda_V
+    if args.lam_trans is not None and args.f_subsample is not None:
+        lam_trans = args.lam_trans / args.lam_V
         for ax in axs.flatten():
-            ax.axvline(lambda_trans, color='k', linestyle=':')
-        
+            ax.axvline(lam_trans, color='k', linestyle=':')
+
     fig.align_labels()
     fig.tight_layout()
     
@@ -881,6 +883,8 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         :use_optimised (bool, default=False): Whether to use the optimised attenuation curves for the operon
             fit or the original ones (the latter is the default and uses the IOB parameters).
     """
+
+    raise NotImplementedError("This function is not yet implemented as we do not have new literature fits available.")
     
     args = OperonArgs(ini_file)
 
