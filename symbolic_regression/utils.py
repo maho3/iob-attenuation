@@ -56,6 +56,13 @@ class OperonArgs(object):
         self.fit_log = bool(config['data']['fit_log'].strip().lower() == 'true')
         self.lam_max = float(config['data']['lam_max'])
         self.lam_min = float(config['data']['lam_min'])
+        self.lam_bump_min = float(config['data'].get('lam_bump_min', self.lam_min))
+        self.lam_bump_max = float(config['data'].get('lam_bump_max', self.lam_max))
+        self.keep_region = config['data'].get('keep_region', 'all').strip().lower()
+        if self.keep_region not in ['all', 'outer', 'bump']:
+            raise ValueError("keep_region must be one of 'all', 'outer', or 'bump'")
+        if self.lam_bump_min >= self.lam_bump_max:
+            raise ValueError("lam_bump_min must be less than lam_bump_max")
 
         val = config['data'].get('lam_trans')
         self.lam_trans = float(val) if val is not None else None

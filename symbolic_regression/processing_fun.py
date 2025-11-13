@@ -215,7 +215,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, prefi
                    old_global_prefix=prefix, global_prefix='a', local_prefix='B')
 
     rcParams['font.size'] = 16
-    rcParams["text.usetex"] = True
+    # rcParams["text.usetex"] = True
     
     if 'MedAE_train_F' in df.columns:
         fig, axs = plt.subplots(1, 2, figsize=(16, 5), sharex=True)
@@ -318,7 +318,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     
     cmap = plt.get_cmap('Set1')
     rcParams['font.size'] = 16
-    rcParams["text.usetex"] = True
+    # rcParams["text.usetex"] = True
 
     # See if we are doing dF/F
     fname= f'{out_dir}/{run_name}_train_{length}.csv'
@@ -418,7 +418,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     return fig, axs
 
 
-def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, plot_dF_F=True):
+def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, plot_dF_F=True, yscale='linear'):
     """
     Plot an example curve
     
@@ -461,7 +461,7 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
     length = list(df['Length'])[eq_idx]
     
     rcParams['font.size'] = 16
-    rcParams["text.usetex"] = True
+    # rcParams["text.usetex"] = True
         
     nrow = 1 + int(plot_av_diff) + int(plot_dF_F)
     fig, axs = plt.subplots(nrow, 2, figsize=(15,4*nrow), sharex=True, sharey='row')
@@ -500,8 +500,8 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
             c = f'C{j-offset}'
             t = ytrue[j*len(lam):(j+1)*len(lam)]
             p = ypred[j*len(lam):(j+1)*len(lam)]
-            axs[0,i].plot(lam, t, color=c, ls='--')
-            axs[0,i].plot(lam, p, color=c)
+            axs[0,i].plot(lam, t, color=c, ls='--', marker='.')
+            axs[0,i].plot(lam, p, color=c, marker='.')
             if plot_av_diff:
                 axs[1,i].plot(lam, t - p, color=c)
             if plot_dF_F:
@@ -512,7 +512,10 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
         if plot_dF_F:
             axs[2,i].axhline(0, color='k', ls='--', lw=2)
         axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
-        axs[0,i].set_ylim(0, None)
+
+        axs[0,i].set_yscale(yscale)
+        if yscale == 'linear':
+            axs[0,i].set_ylim(0, None)
 
     axs[0,0].set_ylabel(r'$A \ / \ A_{\rm V}$')
     if plot_av_diff:

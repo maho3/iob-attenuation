@@ -6,10 +6,11 @@ import os
 import argparse
 import pandas as pd
 import re
+import matplotlib.pyplot as plt
 
 import select_gals
 
-def get_data(ini_file, overwrite=False):
+def get_data(ini_file, overwrite=False, plot_examples=False):
 
     args = OperonArgs(ini_file)
 
@@ -94,6 +95,19 @@ def get_data(ini_file, overwrite=False):
         mask = (lam_arr < args.lam_max) & (lam_arr > args.lam_min)
         lam_arr = lam_arr[mask]
         attenuation_cols = [attenuation_cols[i] for i in sort_idx if mask[i]]
+        print(f'\tNumber of wavelengths after applying lam_min and lam_max:', len(lam_arr))
+
+        # Cut wavelengths in the bump region if specified
+        if args.keep_region in ['bump', 'outer']:
+            print(f'\tKeeping only the {args.keep_region} region of the attenuation curve...')
+            if args.keep_region == 'bump':
+                mask = (lam_arr >= args.lam_bump_min) & (lam_arr <= args.lam_bump_max)
+            else:  # outer
+                mask = (lam_arr < args.lam_bump_min) | (lam_arr > args.lam_bump_max)
+            lam_arr = lam_arr[mask]
+            attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
+            print(f'\tNumber of wavelengths after keeping {args.keep_region} region:', len(lam_arr))
+
         lam_arr = lam_arr / args.lambda_V
 
         # Subsample wavelengths if specified
@@ -146,10 +160,44 @@ def get_data(ini_file, overwrite=False):
         header = ' '.join(['galaxy_id', 'los'] + in_cols + ['lam', 'A'])
         np.savetxt(outname, output_array, header=header, comments='')
 
+    if plot_examples:
+
+        print('\nPlotting example attenuation curves from each set...')
+
+        for name, df in zip(['train', 'val', 'test'], [df_train, df_val, df_test]):
+            out_dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
+            os.makedirs(out_dirname, exist_ok=True)
+            outname = pjoin(out_dirname, f'{args.in_param}_{name}_data.txt')
+            output_array = np.loadtxt(outname, skiprows=1)
+            ngal = len(np.unique(output_array[:,0]))
+            lam_arr = np.unique(output_array[:, -2])
+            nlam = len(lam_arr)
+
+            nlam = len(lam_arr)
+            nexamples = min(5, ngal)
+            plt.figure(figsize=(8,6))
+            for i in range(nexamples):
+                plt.plot(lam_arr * args.lambda_V,
+                            output_array[i*nlam:(i+1)*nlam, -1],
+                            '.',
+                            label=f'Galaxy {int(output_array[i*nlam,0])}')
+            plt.xlabel(r'Wavelength $\lambda$ [μm]')
+            plt.ylabel('Attenuation A(λ)')
+            plt.title(f'Example Attenuation Curves from {name.capitalize()} Set')
+            plt.legend()
+            plt.grid()
+            plt.yscale('log')
+            plt.tight_layout()
+            plot_outname = pjoin(out_dirname, f'{args.in_param}_{name}_examples.png')
+            plt.savefig(plot_outname)
+            plt.close()
+            print(f'\tSaved example plot to {plot_outname}')
+
+
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Get data with a specified config file.")
     parser.add_argument("config_path", help="Path to the configuration file.")
     args = parser.parse_args()
-    get_data(args.config_path, True)
+    get_data(args.config_path, plot_examples=True)
