@@ -500,6 +500,61 @@ def plot_iob_distributions(df, df_final):
     return
 
 
+def remove_negative_curves(df, selection_args):
+    """
+    Remove attenuation curves with any negative values or NaNs.
+
+    Args:
+        :df (pd.DataFrame): Input DataFrame with galaxy data.
+        :selection_args: Arguments containing selection parameters.
+
+    Returns:
+        :df (pd.DataFrame): DataFrame with negative curves removed.
+    """
+
+    col_names = [c for c in df.keys() if c.startswith('A_') and c[2:-1].isdigit()]
+    lam = np.array([float(c[2:-1]) for c in col_names])
+    lam_sort = np.argsort(lam)
+    col_names = [col_names[i] for i in lam_sort]
+    A_curves = df[col_names].to_numpy()
+    mask_negative = np.any(A_curves <= 0.0, axis=1) | np.any(np.isnan(A_curves), axis=1)
+    n_negative = np.sum(mask_negative)
+    if n_negative > 0:
+        print(f"Removing {n_negative} curves with negative attenuation values.")
+        df = df[~mask_negative].reset_index(drop=True)
+
+    return df
+
+
+def remove_peaked_curves(df, selection_args):
+    """
+    Remove attenuation curves that are too peaked beyond a threshold.
+
+    Args:
+        :df (pd.DataFrame): Input DataFrame with galaxy data.
+        :selection_args: Arguments containing selection parameters.
+
+    Returns:
+        :df (pd.DataFrame): DataFrame with peaked curves removed.
+    """
+
+    col_names = [c for c in df.keys() if c.startswith('A_') and c[2:-1].isdigit()]
+    lam = np.array([float(c[2:-1]) for c in col_names])
+    lam_sort = np.argsort(lam)
+    col_names = [col_names[i] for i in lam_sort]
+    A_curves = df[col_names].to_numpy()
+    lam_mask = lam > selection_args.peak_lambda_min
+    A_diff = np.diff(A_curves[:, lam_mask], axis=1) / A_curves[:, lam_mask][:, :-1]  # Relative difference between adjacent wavelengths
+    max_diff = np.max(A_diff, axis=1)  # Max difference between adjacent wavelengths for each curve
+    mask_too_peaked = max_diff >= selection_args.peak_threshold
+    n_peaked = np.sum(mask_too_peaked)
+    if n_peaked > 0:
+        print(f"Removing {n_peaked} curves that are too peaked (threshold: {selection_args.peak_threshold}).")
+        df = df[~mask_too_peaked].reset_index(drop=True)
+
+    return df
+
+
 def select_gals_laura(selection_args):
 
     print('\nSelecting galaxies using Laura\'s method...\n')
@@ -517,6 +572,14 @@ def select_gals_laura(selection_args):
     print(df['galaxy_id'].nunique(), "unique galaxies before inconsistency check.")
     df = check_inconsistency(df, cols_to_check)
     print(df['galaxy_id'].nunique(), "unique galaxies after inconsistency check.")
+
+    # Remove curves if they have any negative values or nans
+    if selection_args.remove_negative_curves:
+        df = remove_negative_curves(df, selection_args)
+
+    # Remove curves if they are too peaked beyond a threshold
+    if selection_args.remove_peaked_curves:
+        df = remove_peaked_curves(df, selection_args)
 
     df_orig = df.copy()
 

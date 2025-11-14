@@ -176,6 +176,11 @@ class SelectionArgs(object):
         self.ntest = int(config['selection']['ntest'])
         self.rng_seed = int(config['selection']['rng_seed'])
 
+        self.remove_negative_curves = config['selection'].getboolean('remove_negative_curves')
+        self.remove_peaked_curves = config['selection'].getboolean('remove_peaked_curves')
+        self.peak_threshold = float(config['selection'].get('peak_threshold', 0.5))
+        self.peak_lambda_min = float(config['selection'].get('peak_lambda_min', 5542))
+
         if self.method == 'laura':
             self.min_per_bin_mult = int(config['laura']['min_per_bin_mult'])
             self.nbins_max = int(config['laura']['nbins_max'])

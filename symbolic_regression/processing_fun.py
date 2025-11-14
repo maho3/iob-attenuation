@@ -370,7 +370,15 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
             low = np.nanpercentile(all_frac_res, 50 - delta, axis=0) 
             high = np.nanpercentile(all_frac_res, 50 + delta, axis=0)
             print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
-            axs[0,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
+            if args.keep_region == 'outer':
+                # Don't want to plot errors in the bumpy region as there are no data points there
+                mlow = lam <= args.lam_bump_min / args.lambda_V
+                mhigh = lam >= args.lam_bump_max / args.lambda_V
+                assert mlow.sum() + mhigh.sum() == len(lam)
+                axs[0,i].fill_between(lam[mlow], low[mlow], high[mlow], color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
+                axs[0,i].fill_between(lam[mhigh], low[mhigh], high[mhigh], color=cmap(j))
+            else:
+                axs[0,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
         axs[0,i].plot(lam, np.nanmedian(all_frac_res, axis=0), color='k')
 
         median_abs = np.nanmedian(np.abs(all_frac_res), axis=0)
@@ -389,7 +397,15 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
                 low = np.nanpercentile(dF_F, 50 - delta, axis=0) 
                 high = np.nanpercentile(dF_F, 50 + delta, axis=0)
                 print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
-                axs[1,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
+                if args.keep_region == 'outer':
+                    # Don't want to plot errors in the bumpy region as there are no data points there
+                    mlow = lam <= args.lam_bump_min / args.lambda_V
+                    mhigh = lam >= args.lam_bump_max / args.lambda_V
+                    assert mlow.sum() + mhigh.sum() == len(lam)
+                    axs[1,i].fill_between(lam[mlow], low[mlow], high[mlow], color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
+                    axs[1,i].fill_between(lam[mhigh], low[mhigh], high[mhigh], color=cmap(j))
+                else:
+                    axs[1,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
             axs[1,i].plot(lam, np.nanmedian(dF_F, axis=0), color='k')
             print("Median absolute DF/F", np.nanmedian(np.abs(dF_F)))
             print("RMSE DF/F", np.sqrt(np.nanmean(dF_F ** 2)))
@@ -404,6 +420,9 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
         ax.axhline(0, color='k', ls='--', lw=2)
         ax.axhline(0.01, color='k', ls='--', lw=2)
         ax.axhline(-0.01, color='k', ls='--', lw=2)
+        if args.keep_region == 'outer':
+            ax.axvspan(args.lam_bump_min / args.lambda_V, args.lam_bump_max / args.lambda_V,
+                               color='grey', alpha=0.5)
 
     axs[0,0].set_title('Training')
     axs[0,1].set_title('Validation')
@@ -545,6 +564,9 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
                 if plot_dF_F:
                     axs[2,i].plot(lam[mlow], dF_F[j*len(lam):(j+1)*len(lam)][mlow], color=c, marker='.')
                     axs[2,i].plot(lam[mhigh], dF_F[j*len(lam):(j+1)*len(lam)][mhigh], color=c, marker='.')
+                for ax in axs[:,i]:
+                    ax.axvspan(args.lam_bump_min / args.lambda_V, args.lam_bump_max / args.lambda_V,
+                               color='grey', alpha=0.1)
             else:
                 axs[0,i].plot(lam, t, color=c, ls='--', marker='.')
                 if plot_av_diff:
