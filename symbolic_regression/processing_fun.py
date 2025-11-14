@@ -341,15 +341,15 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
 
         fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
         data = np.loadtxt(fname)
-        ytrue = data[:,args.npar+1]
-        ypred = data[:,args.npar+2]
+        ytrue = data[:,-3]
+        ypred = data[:,-2]
 
         rmse = np.sqrt(np.mean((ytrue - ypred) ** 2))
         print(f'\nRMSE {name}: %.3e'%rmse)
         
-        if target == 'log10A':
-            ypred = 10. ** ypred
-            ytrue = 10. ** ytrue
+        # if target == 'log10A':
+        #     ypred = 10. ** ypred
+        #     ytrue = 10. ** ytrue
 
         dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
         fname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
@@ -365,20 +365,25 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
                 all_frac_res[j] = ypred[j*len(lam):(j+1)*len(lam)] - ytrue[j*len(lam):(j+1)*len(lam)]
         all_frac_res = np.array(all_frac_res)
         all_perc = [34+13.5+2.35, 34+13.5, 34]
-        all_perc = all_perc[1:]
+        all_perc = all_perc[2:]
         for j, delta in enumerate(all_perc):
             low = np.nanpercentile(all_frac_res, 50 - delta, axis=0) 
             high = np.nanpercentile(all_frac_res, 50 + delta, axis=0)
             print(f'\t\t{len(all_perc)-j} sigma:', np.amin(low), np.amax(high))
             axs[0,i].fill_between(lam, low, high, color=cmap(j), label=str(len(all_perc)-j) + r'$\sigma$')
         axs[0,i].plot(lam, np.nanmedian(all_frac_res, axis=0), color='k')
+
+        median_abs = np.nanmedian(np.abs(all_frac_res), axis=0)
+        axs[0,i].plot(lam, median_abs, color='g', ls='--', label='Median Abs Error')
+        axs[0,i].plot(lam, -median_abs, color='g', ls='--')
+
         rmse = np.sqrt(np.nanmean((all_frac_res) ** 2))
         print("\t\tRMSE:", rmse)
         rmae = np.nanmean(np.abs(all_frac_res))
         print("\t\tRMAE:", rmae)
 
         if do_dF_F:
-            dF_F = data[:,args.npar+3]
+            dF_F = data[:,-1]
             dF_F = dF_F.reshape(-1, len(lam))
             for j, delta in enumerate(all_perc):
                 low = np.nanpercentile(dF_F, 50 - delta, axis=0) 
@@ -388,6 +393,9 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
             axs[1,i].plot(lam, np.nanmedian(dF_F, axis=0), color='k')
             print("Median absolute DF/F", np.nanmedian(np.abs(dF_F)))
             print("RMSE DF/F", np.sqrt(np.nanmean(dF_F ** 2)))
+            median_abs = np.nanmedian(np.abs(dF_F), axis=0)
+            axs[1,i].plot(lam, median_abs, color='g', ls='--', label='Median Abs Error')
+            axs[1,i].plot(lam, -median_abs, color='g', ls='--')
 
         axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
 
@@ -418,7 +426,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     return fig, axs
 
 
-def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, plot_dF_F=True, yscale='linear'):
+def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=True, yscale='linear'):
     """
     Plot an example curve
     
@@ -427,7 +435,6 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
         :ilen (int, default=None): The length of the equation to highlight. If None,
             then this is taken to be the final equation
         :nexamples (int, default=5): Number of examples to plot
-        :offset (int, default=0): The offset in the examples to plot
         :plot_av_diff (bool, default=True): Whether to plot the difference between
             the true and predicted attenuation curve
         :plot_dF_F (bool, default=True): Whether to plot the dF/F values
@@ -471,11 +478,11 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
 
         fname= f'{out_dir}/{run_name}_{name}_{length}.csv'
         data = np.loadtxt(fname)
-        ytrue = data[:,args.npar+1]
-        ypred = data[:,args.npar+2]
+        ytrue = data[:,-3]
+        ypred = data[:,-2]
 
         if data.shape[1] > args.npar+3:
-            dF_F = data[:,args.npar+3]
+            dF_F = data[:,-1]
         else:
             dF_F = np.full_like(ytrue, np.nan)
         
@@ -489,23 +496,62 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
         df = pd.read_csv(fname)
         all_gal_id = df['galaxy_id'].values
         all_los = df['los'].values
+
+        # Get the values of AV
+        log_Av_col = f'logA_{int(args.lambda_V*1e4)}A'
+        A_v_col = f'A_{int(args.lambda_V*1e4)}A'
+        if log_Av_col in df.keys():
+            Av = 10. ** df[log_Av_col].values
+        elif A_v_col in df.keys():
+            Av = df[A_v_col].values
+        else:
+            raise ValueError("Column with lambda_V not found in input file")
+        
+        # We want to find indices of examples roughly evenly spaced in AV
+        percs = [(100.*(j+1))/(nexamples+1) for j in range(nexamples)]
+        perc_vals = np.percentile(Av, percs)
+        perc_indices = []
+        for p in perc_vals:
+            idx = np.argmin(np.abs(Av - p))
+            perc_indices.append(idx)
         
         dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
         fname = pjoin(dirname, f'{args.in_param}_{name}_data.txt')
         df = pd.read_csv(fname, delimiter=r'\s+')
         lam = np.unique(df['lam'].values)
+        all_lam = df['lam'].values
         
         # ytrue here is A
-        for j in range(offset, offset+nexamples):
-            c = f'C{j-offset}'
-            t = ytrue[j*len(lam):(j+1)*len(lam)]
-            p = ypred[j*len(lam):(j+1)*len(lam)]
-            axs[0,i].plot(lam, t, color=c, ls='--', marker='.')
+        # for j in range(offset, offset+nexamples):
+        for j, idx in enumerate(perc_indices):
+            # c = f'C{j-offset}'
+            c = f'C{j}'
+            
+            # Check wavelengths match
+            assert np.all(lam == all_lam[idx*len(lam):(idx+1)*len(lam)])
+            
+            t = ytrue[idx*len(lam):(idx+1)*len(lam)]
+            p = ypred[idx*len(lam):(idx+1)*len(lam)]
+            if args.keep_region == 'outer':
+                # Don't want to plot errors in the bumpy region as there are no data points there
+                mlow = lam <= args.lam_bump_min / args.lambda_V
+                mhigh = lam >= args.lam_bump_max / args.lambda_V
+                assert mlow.sum() + mhigh.sum() == len(lam)
+                axs[0,i].plot(lam[mlow], t[mlow], color=c, ls='--', marker='.')
+                axs[0,i].plot(lam[mhigh], t[mhigh], color=c, ls='--', marker='.')
+                if plot_av_diff:
+                    axs[1,i].plot(lam[mlow], (t - p)[mlow], color=c, marker='.', label=r'${A_{\rm V}}$ percentile: %.1f' % percs[j])
+                    axs[1,i].plot(lam[mhigh], (t - p)[mhigh], color=c, marker='.')
+                if plot_dF_F:
+                    axs[2,i].plot(lam[mlow], dF_F[j*len(lam):(j+1)*len(lam)][mlow], color=c, marker='.')
+                    axs[2,i].plot(lam[mhigh], dF_F[j*len(lam):(j+1)*len(lam)][mhigh], color=c, marker='.')
+            else:
+                axs[0,i].plot(lam, t, color=c, ls='--', marker='.')
+                if plot_av_diff:
+                    axs[1,i].plot(lam, t - p, color=c, marker='.', label=r'${A_{\rm V}}$ percentile: %.1f' % percs[j])
+                if plot_dF_F:
+                    axs[2,i].plot(lam, dF_F[idx*len(lam):(idx+1)*len(lam)], color=c, marker='.')
             axs[0,i].plot(lam, p, color=c, marker='.')
-            if plot_av_diff:
-                axs[1,i].plot(lam, t - p, color=c)
-            if plot_dF_F:
-                axs[2,i].plot(lam, dF_F[j*len(lam):(j+1)*len(lam)], color=c)
 
         if plot_av_diff:
             axs[1,i].axhline(0, color='k', ls='--', lw=2)
@@ -516,6 +562,12 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
         axs[0,i].set_yscale(yscale)
         if yscale == 'linear':
             axs[0,i].set_ylim(0, None)
+
+        dF_F = dF_F.reshape(-1, len(lam))
+        median_abs = np.nanmedian(np.abs(dF_F), axis=0)
+        axs[2,i].plot(lam, median_abs, color='k', ls=':', label='Median Abs Error')
+        axs[2,i].plot(lam, -median_abs, color='k', ls=':')
+        axs[2,i].legend()
 
     axs[0,0].set_ylabel(r'$A \ / \ A_{\rm V}$')
     if plot_av_diff:
@@ -529,6 +581,8 @@ def plot_example(ini_file, ilen=None, nexamples=5, offset=0, plot_av_diff=True, 
         ax.legend(custom_lines, ['True', 'Predicted'])
     axs[0,0].set_title('Training')
     axs[0,1].set_title('Validation')
+    for ax in axs[1]:
+        ax.legend(fontsize=12)
 
     if args.lam_trans is not None and args.f_subsample is not None:
         lam_trans = args.lam_trans / args.lam_V
