@@ -58,3 +58,7 @@ Plot ratio of fluxes - not just the attenuation curve
 4. The functions at the knee of the Pareto front don't always have IOB3 or IOB4, yet these were needed to get a converged MSE in the IOB code
     * Always select functions with these in
     * Can we make the decoder of the IOB smaller so that they appear more simply in the expressions? Perhaps it is too complicated to add them for the gain they provide
+
+# Discussion 17 November
+
+* Need $d \exp(A_\lambda) / d \lambda$ well behaved (transmission function) - want derivative of $F$ to be good

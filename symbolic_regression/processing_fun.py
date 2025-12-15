@@ -573,7 +573,7 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
                     axs[1,i].plot(lam, t - p, color=c, marker='.', label=r'${A_{\rm V}}$ percentile: %.1f' % percs[j])
                 if plot_dF_F:
                     axs[2,i].plot(lam, dF_F[idx*len(lam):(idx+1)*len(lam)], color=c, marker='.')
-            axs[0,i].plot(lam, p, color=c, marker='.')
+            axs[0,i].plot(lam, p, color=c)
 
         if plot_av_diff:
             axs[1,i].axhline(0, color='k', ls='--', lw=2)
