@@ -964,7 +964,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             fit or the original ones (the latter is the default and uses the IOB parameters).
     """
 
-    raise NotImplementedError("This function is not yet implemented as we do not have new literature fits available.")
+    # raise NotImplementedError("This function is not yet implemented as we do not have new literature fits available.")
     
     args = OperonArgs(ini_file)
 
@@ -988,16 +988,20 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
 
         print(f'\nComparing to literature for {name} data...')
 
-        all_data = pd.read_csv(args.input_file, sep='\t')
+        fname = getattr(args.selection, f'{name}_file')
+        data = pd.read_csv(fname, sep=',')
 
         # Load required data
-        matches = pd.read_csv(os.path.join(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'iob_{name}_galaxy_ids_los.txt'), sep='\t')
-        matches.rename(columns={"# galaxy_id": "galaxy_id"}, inplace=True)
-        data = all_data.merge(matches, on=['galaxy_id', 'los'], how='inner')
-        fit_data = pd.read_csv(os.path.join(os.path.dirname(args.input_file), "galaxy_optimization_results.csv"))
+        # matches = pd.read_csv(os.path.join(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'iob_{name}_galaxy_ids_los.txt'), sep='\t')
+        # matches.rename(columns={"# galaxy_id": "galaxy_id"}, inplace=True)
+        # data = all_data.merge(matches, on=['galaxy_id', 'los'], how='inner')
+        fit_data = pd.read_csv(os.path.join(args.selection.in_data_dir , "galaxy_optimization_results.csv"))
         fit_data.rename(columns={"gal_id": "galaxy_id"}, inplace=True)
+        print(fit_data.columns)
+        print(data.columns)
         data = data.merge(fit_data, on=['galaxy_id', 'los'], how='inner')
         data = data.drop_duplicates(subset=["galaxy_id", "los"])
+        print('After merging, using', len(data), 'galaxies.')
 
         # Identify attenuation columns (formatted like A_1000A)
         attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
@@ -1016,7 +1020,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         # Get mask for operon fit later
         if not use_optimised:
             operon_mask = np.zeros(len(data['galaxy_id']), dtype=bool)
-            for i, (gid, los) in enumerate(matches[['galaxy_id', 'los']].values):
+            for i, (gid, los) in enumerate(data[['galaxy_id', 'los']].values):
                 m = (data['galaxy_id'] == gid) & (data['los'] == los)
                 Av = data[Av_name][m].values[0]
                 if which_gals == 'low' and Av < 0.2:
@@ -1047,8 +1051,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         A_at_lv_4par = np.zeros(len(data['galaxy_id']))
 
         # Find out whether we are saving A or log10A
-        fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
-        with open(fname, 'r') as f:
+        with open(args.selection.train_file, 'r') as f:
             header = f.readline().split()
         target = header[-1]
 
@@ -1115,57 +1118,58 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
 
         if use_optimised:
 
-            # Load required data
-            matches = pd.read_csv(os.path.join(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'iob_{name}_galaxy_ids_los.txt'), sep='\t')
-            matches.rename(columns={"# galaxy_id": "galaxy_id"}, inplace=True)
-            data = all_data.merge(matches, on=['galaxy_id', 'los'], how='inner')
-            fit_data = pd.read_csv(os.path.join(os.path.dirname(args.input_file), "galaxy_sr_optimization_results.csv"))
-            fit_data.rename(columns={"gal_id": "galaxy_id"}, inplace=True)
-            data = data.merge(fit_data, on=['galaxy_id', 'los'], how='inner')
-            data = data.drop_duplicates(subset=["galaxy_id", "los"])
+            raise NotImplementedError("Optimised operon comparison not yet implemented.")
+            # # Load required data
+            # matches = pd.read_csv(os.path.join(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'iob_{name}_galaxy_ids_los.txt'), sep='\t')
+            # matches.rename(columns={"# galaxy_id": "galaxy_id"}, inplace=True)
+            # data = all_data.merge(matches, on=['galaxy_id', 'los'], how='inner')
+            # fit_data = pd.read_csv(os.path.join(os.path.dirname(args.input_file), "galaxy_sr_optimization_results.csv"))
+            # fit_data.rename(columns={"gal_id": "galaxy_id"}, inplace=True)
+            # data = data.merge(fit_data, on=['galaxy_id', 'los'], how='inner')
+            # data = data.drop_duplicates(subset=["galaxy_id", "los"])
 
-            # Identify attenuation columns (formatted like A_1000A)
-            attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
-            lam_arr = np.array([int(re.search(r'_(\d+)A', col).group(1)) / 1e4 for col in attenuation_cols])
-            sort_idx = np.argsort(lam_arr)
-            lam_arr = lam_arr[sort_idx]
-            attenuation_cols = [attenuation_cols[i] for i in sort_idx]
-            mask = (lam_arr < args.lam_max) & (lam_arr > args.lam_min)
-            lam_arr = lam_arr[mask]
-            attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
-            lam_cut = lam_arr
+            # # Identify attenuation columns (formatted like A_1000A)
+            # attenuation_cols = [col for col in data.columns if re.match(r'A_\d+A', col)]
+            # lam_arr = np.array([int(re.search(r'_(\d+)A', col).group(1)) / 1e4 for col in attenuation_cols])
+            # sort_idx = np.argsort(lam_arr)
+            # lam_arr = lam_arr[sort_idx]
+            # attenuation_cols = [attenuation_cols[i] for i in sort_idx]
+            # mask = (lam_arr < args.lam_max) & (lam_arr > args.lam_min)
+            # lam_arr = lam_arr[mask]
+            # attenuation_cols = [attenuation_cols[i] for i in range(len(attenuation_cols)) if mask[i]]
+            # lam_cut = lam_arr
 
-            v_index = find_nearest(lam_arr, args.lambda_V)
-            Av_name = attenuation_cols[v_index]
+            # v_index = find_nearest(lam_arr, args.lambda_V)
+            # Av_name = attenuation_cols[v_index]
 
-            # Select galaxies based on Av
-            if which_gals == 'low':
-                mask = (data[Av_name] < 0.2)
-            elif which_gals == 'high':
-                mask = (data[Av_name] > 0.7)
-            elif which_gals == 'all':
-                mask = np.ones(len(data), dtype=bool)
-            else:
-                raise ValueError("Invalid value for 'which_gals'. Choose from 'all', 'low', or 'high'.")
-            data = data[mask]
+            # # Select galaxies based on Av
+            # if which_gals == 'low':
+            #     mask = (data[Av_name] < 0.2)
+            # elif which_gals == 'high':
+            #     mask = (data[Av_name] > 0.7)
+            # elif which_gals == 'all':
+            #     mask = np.ones(len(data), dtype=bool)
+            # else:
+            #     raise ValueError("Invalid value for 'which_gals'. Choose from 'all', 'low', or 'high'.")
+            # data = data[mask]
 
-            A_err_op = np.zeros((len(data['galaxy_id']), len(lam_arr)))
-            df_F_op = np.zeros((len(data['galaxy_id']), len(lam_arr)))
-            A_at_lv_op = np.zeros(len(data['galaxy_id']))
+            # A_err_op = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+            # df_F_op = np.zeros((len(data['galaxy_id']), len(lam_arr)))
+            # A_at_lv_op = np.zeros(len(data['galaxy_id']))
 
-            for i in tqdm(range(len(data['galaxy_id']))):
+            # for i in tqdm(range(len(data['galaxy_id']))):
 
-                popt = string_to_list(data['popt'].iloc[i])
-                Alam_arr_cut = data[attenuation_cols].iloc[i].values.flatten()
+            #     popt = string_to_list(data['popt'].iloc[i])
+            #     Alam_arr_cut = data[attenuation_cols].iloc[i].values.flatten()
 
-                Av = Alam_arr_cut[v_index]
-                Alam_Av_arr_cut = Alam_arr_cut/Av
-                fit_op = sr_fun.compute_Av(lam_cut / lam_arr[v_index], *popt)
+            #     Av = Alam_arr_cut[v_index]
+            #     Alam_Av_arr_cut = Alam_arr_cut/Av
+            #     fit_op = sr_fun.compute_Av(lam_cut / lam_arr[v_index], *popt)
                 
-                df_F_op[i] = 10. ** (0.4 * Av * (Alam_Av_arr_cut - fit_op)) - 1.0
-                A_err_op[i] = Alam_Av_arr_cut - fit_op
+            #     df_F_op[i] = 10. ** (0.4 * Av * (Alam_Av_arr_cut - fit_op)) - 1.0
+            #     A_err_op[i] = Alam_Av_arr_cut - fit_op
 
-                A_at_lv_op[i] = fit_op[v_index]
+            #     A_at_lv_op[i] = fit_op[v_index]
 
         else:
 
@@ -1178,14 +1182,17 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             if target == 'log10A':
                 ypred = 10. ** ypred
                 ytrue = 10. ** ytrue
-            fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+            # fname = pjoin(args.data_dir, f'{args.in_param}_data_{args.version_num}', f'{args.in_param}_train_data.txt')
+            dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
+            fname = pjoin(dirname, f'{args.in_param}_train_data.txt')
             with open(fname, 'r') as f:
                 header = f.readline().split()
             lam = np.unique(np.loadtxt(fname, skiprows=1)[:,header.index('lam')])
-            A_err_op = [None] * getattr(args, f'n{name}')
-            df_F_op = [None] * getattr(args, f'n{name}')
-            A_at_lv_op = [None] * getattr(args, f'n{name}')
-            for j in range(getattr(args, f'n{name}')):
+            n = int(len(data) / len(lam))
+            A_err_op = [None] * n
+            df_F_op = [None] * n
+            A_at_lv_op = [None] * n
+            for j in range(n):
                 A_err_op[j] = ypred[j*len(lam):(j+1)*len(lam)] - ytrue[j*len(lam):(j+1)*len(lam)]
                 df_F_op[j] = data[j*len(lam):(j+1)*len(lam),args.npar+3]
                 A_at_lv_op[j] = ypred[j*len(lam):(j+1)*len(lam)][v_index]
@@ -1193,9 +1200,9 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
             df_F_op = np.array(df_F_op)[operon_mask]
 
         # Subsample wavelengths if specified
-        if args.lambda_trans is not None and args.f_subsample is not None:
-            print(f'\tSubsampling wavelengths above {args.lambda_trans} by a factor of {args.f_subsample}')
-            lambda_trans = args.lambda_trans #/ args.lambda_V
+        if args.lam_trans is not None and args.f_subsample is not None:
+            print(f'\tSubsampling wavelengths above {args.lam_trans} by a factor of {args.f_subsample}')
+            lambda_trans = args.lam_trans #/ args.lambda_V
             mask_below = lam_cut < lambda_trans
             idx_above = np.nonzero(lam_cut >= lambda_trans)[0]
             mask_above = np.zeros_like(mask_below)
@@ -1275,7 +1282,7 @@ def compare_to_literature(ini_file, ilen=None, which_gals='all', use_optimised=F
         print(f"\tMedian Absolute Deviation of dF/F for 4-parameter fit on training data: {medae_F_4par}")
         print(f"\tMedian Absolute Deviation of dF/F for SR fit on training data: {medae_F_op}")
 
-    if args.lambda_trans is not None and args.f_subsample is not None:
+    if args.lam_trans is not None and args.f_subsample is not None:
         lambda_trans = args.lambda_trans / args.lambda_V
         for ax in axs.flatten():
             ax.axvline(lambda_trans, color='k', linestyle=':')
