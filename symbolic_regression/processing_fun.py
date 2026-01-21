@@ -445,7 +445,7 @@ def prediction_plots(ini_file, ilen=None, plot_frac_error=False):
     return fig, axs
 
 
-def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=True, yscale='linear'):
+def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=True, yscale='linear', subtract_outer=False):
     """
     Plot an example curve
     
@@ -457,7 +457,9 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
         :plot_av_diff (bool, default=True): Whether to plot the difference between
             the true and predicted attenuation curve
         :plot_dF_F (bool, default=True): Whether to plot the dF/F values
-            
+        :yscale (str, default='linear'): The y scale to use for the attenuation curve plot
+        :subtract_outer (bool, default=False): Whether to subtract the outer region function from the difference plot
+
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing plot
         :axs (np.ndarray[matplotlib.pyplot.axis]): Axes of fig containing the plot
@@ -526,6 +528,12 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
         else:
             raise ValueError("Column with lambda_V not found in input file")
         
+        # Get the outer prediction if needed
+        if subtract_outer:
+            fname_outer = f'{out_dir}/{run_name}_outer_{name}.csv'
+            df_outer = pd.read_csv(fname_outer)
+            A_outer = df_outer['A_outer'].values
+        
         # We want to find indices of examples roughly evenly spaced in AV
         percs = [(100.*(j+1))/(nexamples+1) for j in range(nexamples)]
         perc_vals = np.percentile(Av, percs)
@@ -551,51 +559,66 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
             
             t = ytrue[idx*len(lam):(idx+1)*len(lam)]
             p = ypred[idx*len(lam):(idx+1)*len(lam)]
+
+            if subtract_outer:
+                out = A_outer[idx*len(lam):(idx+1)*len(lam)]
+            else:
+                out = 0.0
+
             if args.keep_region == 'outer':
                 # Don't want to plot errors in the bumpy region as there are no data points there
                 mlow = lam <= args.lam_bump_min / args.lambda_V
                 mhigh = lam >= args.lam_bump_max / args.lambda_V
                 assert mlow.sum() + mhigh.sum() == len(lam)
-                axs[0,i].plot(lam[mlow], t[mlow], color=c, ls='--', marker='.')
-                axs[0,i].plot(lam[mhigh], t[mhigh], color=c, ls='--', marker='.')
+                axs[0,i].plot(lam[mlow], t[mlow] - out[mlow], color=c, ls='--', marker='.')
+                axs[0,i].plot(lam[mhigh], t[mhigh] - out[mhigh], color=c, ls='--', marker='.')
                 if plot_av_diff:
                     axs[1,i].plot(lam[mlow], (t - p)[mlow], color=c, marker='.', label=r'${A_{\rm V}}$ percentile: %.1f' % percs[j])
                     axs[1,i].plot(lam[mhigh], (t - p)[mhigh], color=c, marker='.')
                 if plot_dF_F:
-                    axs[2,i].plot(lam[mlow], dF_F[j*len(lam):(j+1)*len(lam)][mlow], color=c, marker='.')
-                    axs[2,i].plot(lam[mhigh], dF_F[j*len(lam):(j+1)*len(lam)][mhigh], color=c, marker='.')
+                    if not plot_av_diff:
+                        label = r'${A_{\rm V}}$ percentile: %.1f' % percs[j]
+                    else:
+                        label = None
+                    axs[1+int(plot_av_diff),i].plot(lam[mlow], dF_F[j*len(lam):(j+1)*len(lam)][mlow], color=c, marker='.', label=label)
+                    axs[1+int(plot_av_diff),i].plot(lam[mhigh], dF_F[j*len(lam):(j+1)*len(lam)][mhigh], color=c, marker='.')
                 for ax in axs[:,i]:
                     ax.axvspan(args.lam_bump_min / args.lambda_V, args.lam_bump_max / args.lambda_V,
                                color='grey', alpha=0.1)
             else:
-                axs[0,i].plot(lam, t, color=c, ls='--', marker='.')
+                axs[0,i].plot(lam, t - out, color=c, ls='--', marker='.')
                 if plot_av_diff:
                     axs[1,i].plot(lam, t - p, color=c, marker='.', label=r'${A_{\rm V}}$ percentile: %.1f' % percs[j])
                 if plot_dF_F:
-                    axs[2,i].plot(lam, dF_F[idx*len(lam):(idx+1)*len(lam)], color=c, marker='.')
-            axs[0,i].plot(lam, p, color=c)
+                    if not plot_av_diff:
+                        label = r'${A_{\rm V}}$ percentile: %.1f' % percs[j]
+                    else:
+                        label = None
+                    axs[1+int(plot_av_diff),i].plot(lam, dF_F[idx*len(lam):(idx+1)*len(lam)], color=c, marker='.', label=label)
+            axs[0,i].plot(lam, p - out, color=c)
 
         if plot_av_diff:
             axs[1,i].axhline(0, color='k', ls='--', lw=2)
         if plot_dF_F:
-            axs[2,i].axhline(0, color='k', ls='--', lw=2)
+            axs[1+int(plot_av_diff),i].axhline(0, color='k', ls='--', lw=2)
         axs[-1,i].set_xlabel(r'$\lambda \ / \ \lambda_{\rm V}$')
 
         axs[0,i].set_yscale(yscale)
-        if yscale == 'linear':
-            axs[0,i].set_ylim(0, None)
+        # if yscale == 'linear':
+        #     axs[0,i].set_ylim(0, None)
 
-        dF_F = dF_F.reshape(-1, len(lam))
-        median_abs = np.nanmedian(np.abs(dF_F), axis=0)
-        axs[2,i].plot(lam, median_abs, color='k', ls=':', label='Median Abs Error')
-        axs[2,i].plot(lam, -median_abs, color='k', ls=':')
-        axs[2,i].legend()
+        if plot_dF_F:
+            dF_F = dF_F.reshape(-1, len(lam))
+            median_abs = np.nanmedian(np.abs(dF_F), axis=0)
+            axs[1+int(plot_av_diff),i].plot(lam, median_abs, color='k', ls=':', label='Median Abs Error')
+            axs[1+int(plot_av_diff),i].plot(lam, -median_abs, color='k', ls=':')
+            axs[1+int(plot_av_diff),i].legend()
 
     axs[0,0].set_ylabel(r'$A \ / \ A_{\rm V}$')
     if plot_av_diff:
         axs[1,0].set_ylabel(r'$\frac{A}{A_{\rm V}} - \left(\frac{A}{A_{\rm V}}\right)_{\rm pred}$')
     if plot_dF_F:
-        axs[2,0].set_ylabel(r'$\Delta F/F$')
+        axs[1+int(plot_av_diff),0].set_ylabel(r'$\Delta F/F$')
                 
     custom_lines = [Line2D([0], [0], color='k', lw=2, ls='--'),
                 Line2D([0], [0], color='k', lw=2, ls='-')]
@@ -604,7 +627,7 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
     axs[0,0].set_title('Training')
     axs[0,1].set_title('Validation')
     for ax in axs[1]:
-        ax.legend(fontsize=12)
+        ax.legend(fontsize=12, ncol=2)
 
     if args.lam_trans is not None and args.f_subsample is not None:
         lam_trans = args.lam_trans / args.lam_V
@@ -686,7 +709,7 @@ def convert_sympy_expr(expr, old_local_prefix='IOB', old_global_prefix='b'):
     # Replace IOBn → IOB[n-1] for 1-indexing
     code = re.sub(r'IOB(\d+)', lambda m: f'{old_local_prefix}[{int(m.group(1))-1}]', code)
     # bN → b[N] (already numeric indexing)
-    code = re.sub(r'\bb(\d+)\b', lambda m: f'{old_global_prefix}[{int(m.group(1))}]', code)
+    code = re.sub(r'\b%s(\d+)\b'%old_global_prefix, lambda m: f'{old_global_prefix}[{int(m.group(1))}]', code)
 
     return code
 
@@ -708,7 +731,7 @@ def generate_code(mapping, b, old_local_prefix='IOB', old_global_prefix='b'):
 
     code_lines = ["def compute_initial_B(IOB):"]
     b_list = [b[f'{old_global_prefix}{i}'] for i in range(len(b))]
-    code_lines.append(f"    b = {b_list}")  # Add the global parameters as a list
+    code_lines.append(f"    {old_global_prefix} = {b_list}")  # Add the global parameters as a list
     for k, v in mapping.items():
         key_name = str(k)
         i = int(key_name[1:])
@@ -913,6 +936,7 @@ def reparameterise(expr_str, global_vals, xname='x', old_global_prefix='b', old_
         f.write("import numpy as np\n")
 
         code = generate_code(local_replacements, global_vals, old_local_prefix='IOB', old_global_prefix=old_global_prefix)
+        code = code.replace("math.", "np.")
         print("", file=f)
         print(code, file=f)
 

@@ -51,6 +51,8 @@ class OperonArgs(object):
         self.selection_conf = config['system']['selection_conf']
         self.selection = SelectionArgs(self.selection_conf, verbose=verbose)
 
+        self.subtract_outer = bool(config['data']['subtract_outer'].strip().lower() == 'true') if 'subtract_outer' in config['data'] else False
+
         self.lambda_V = float(config['data']['lambda_v'])
         self.npar = int(config['data']['npar'])
         self.fit_log = bool(config['data']['fit_log'].strip().lower() == 'true')

@@ -10,6 +10,7 @@ from os.path import join as pjoin
 import argparse
 import pandas as pd
 import warnings
+import outer_term
 
 def run_operon(ini_file):
     """
@@ -28,6 +29,9 @@ def run_operon(ini_file):
     
     args = OperonArgs(ini_file)
     target_name = 'A'
+
+    if args.subtract_outer and args.fit_log:
+        raise NotImplementedError("Cannot subtract outer term when fitting log(A)")
     
     # Load training and validation data
     dirname = pjoin(args.out_data_dir, f'{args.in_param}_data_{args.version_num}')
@@ -44,6 +48,23 @@ def run_operon(ini_file):
     y = df_train[target_name].values
     Xval = df_val[in_cols].values
     yval = df_val[target_name].values
+
+    if args.subtract_outer:
+        # Get outer term fit parameter C0
+        df_outer_train = pd.read_csv(pjoin(args.out_data_dir, 'outer_fit_results_train.csv'))
+        df_outer_val = pd.read_csv(pjoin(args.out_data_dir, 'outer_fit_results_val.csv'))
+        C0_train = df_outer_train['C0_opt'].values
+        C0_val = df_outer_val['C0_opt'].values
+        nx = len(np.unique(df_train['lam'].values))
+        C0_train = np.repeat(C0_train, nx)
+        C0_val = np.repeat(C0_val, nx)
+        
+        # Subtract outer term from y values
+        print('Subtracting outer term from target values')
+        outer_train = outer_term.compute_Av(df_train['lam'].values, C0_train).astype(y.dtype)
+        outer_val = outer_term.compute_Av(df_val['lam'].values, C0_val).astype(yval.dtype)
+        y -= outer_train
+        yval -= outer_val
 
     # Get the normalisation of the curves
     df_all_train = pd.read_csv(args.selection.train_file)
@@ -85,21 +106,21 @@ def run_operon(ini_file):
     if args.fit_log and target_name == 'A':
         pos_train = y > 0
         pos_val = yval > 0
-        X_train_use = X[pos_train,:]
-        y_train_use = np.log10(y[pos_train])
-        X_val_use = Xval[pos_val,:]
-        y_val_use = np.log10(yval[pos_val])
-        train_Av_use = train_Av[pos_train]
-        val_Av_use = val_Av[pos_val]
+        X_train_use = X[pos_train,:].copy()
+        y_train_use = np.log10(y[pos_train]).copy()
+        X_val_use = Xval[pos_val,:].copy()
+        y_val_use = np.log10(yval[pos_val]).copy()
+        train_Av_use = train_Av[pos_train].copy()
+        val_Av_use = val_Av[pos_val].copy()
     else:
         pos_train = np.ones(y.shape[0], dtype=bool)
         pos_val = np.ones(yval.shape[0], dtype=bool)
-        X_train_use = X
-        y_train_use = y
-        X_val_use = Xval
-        y_val_use = yval
-        train_Av_use = train_Av
-        val_Av_use = val_Av
+        X_train_use = X.copy()
+        y_train_use = y.copy()
+        X_val_use = Xval.copy()
+        y_val_use = yval.copy()
+        train_Av_use = train_Av.copy()
+        val_Av_use = val_Av.copy()
 
     reg = SymbolicRegressor(
             allowed_symbols=args.allowed_symbols,
@@ -123,7 +144,15 @@ def run_operon(ini_file):
     print(reg.get_model_string(reg.model_, 2))
     print(reg.stats_)
 
+    # if args.subtract_outer:
+    #     print('Re-adding outer term to predictions when saving results')
+    #     y += outer_train
+    #     yval += outer_val
+    #     y_train_use += outer_train[pos_train]
+    #     y_val_use += outer_val[pos_val]
+
     mse = MSE()
+
     
     # Output directory
     run_name = f'{args.in_param}_{str(args.version_num)}'
@@ -152,7 +181,30 @@ def run_operon(ini_file):
         writer = csv.writer(f, delimiter='\t')
         writer.writerow(in_cols + [target_name])
 
+    # Save the outer term results
+    if args.subtract_outer:
+        df_outer = pd.DataFrame({
+        'C0': C0_train,
+        'x': df_train['lam'],
+        'A_outer': outer_train
+        })
+        df_outer.to_csv(f'{out_dir}/{run_name}_outer_train.csv', index=False)
+
+        df_outer_val = pd.DataFrame({
+        'C0': C0_val,
+        'x': df_val['lam'],
+        'A_outer': outer_val
+        })
+        df_outer_val.to_csv(f'{out_dir}/{run_name}_outer_val.csv', index=False)
+
     res = [(s['tree'],  s['model']) for s in reg.pareto_front_]
+
+    if args.subtract_outer:
+        print('Re-adding outer term to predictions when saving results')
+        y += outer_train
+        yval += outer_val
+        y_train_use += outer_train[pos_train]
+        y_val_use += outer_val[pos_val]
 
     with open(outname, "w") as f:
         writer = csv.writer(f, delimiter=';')
@@ -160,6 +212,8 @@ def run_operon(ini_file):
         for model, model_str in res:
 
             y_pred_train = reg.evaluate_model(model, np.asfortranarray(X))
+            if args.subtract_outer:
+                y_pred_train += outer_train
 
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
             if args.fit_log:
@@ -168,17 +222,22 @@ def run_operon(ini_file):
             else:
                 A_pred = y_pred_train
                 A_true = y_train_use
+
+
             dF_F_train = 10. ** (0.4 * train_Av_use * (A_true - A_pred[pos_train])) - 1.0
 
             try:
                 mse_train = mse(y_train_use, y_pred_train[pos_train])
-            except:
+            except Exception as e:
                 print('Error calculating train mse for model:', model.Length)
+                print(e)
+                print(y_train_use.dtype, y_pred_train[pos_train].dtype)
                 mse_train = np.nan
             try:
                 r2_train = r2_score(y_train_use, y_pred_train[pos_train])
-            except:
+            except Exception as e:
                 print('Error calculating train r2 for model:', model.Length)
+                print(e)
                 r2_train = np.nan
             try:
                 medae_train_F = float(np.median(np.abs(dF_F_train)))
@@ -187,6 +246,8 @@ def run_operon(ini_file):
                 medae_train_F = np.nan
 
             y_pred_val = reg.evaluate_model(model, np.asfortranarray(Xval))
+            if args.subtract_outer:
+                y_pred_val += outer_val
 
             # dF_F = 10. ** (0.4 * A_star * (t - p)) - 1.0
             if args.fit_log:
@@ -195,6 +256,7 @@ def run_operon(ini_file):
             else:
                 A_pred = y_pred_val
                 A_true = y_val_use
+
             dF_F_val = 10. ** (0.4 * val_Av_use * (A_true - A_pred[pos_val])) - 1.0
 
             try:
