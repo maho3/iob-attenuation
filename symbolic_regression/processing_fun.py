@@ -563,7 +563,7 @@ def plot_example(ini_file, ilen=None, nexamples=5, plot_av_diff=True, plot_dF_F=
             if subtract_outer:
                 out = A_outer[idx*len(lam):(idx+1)*len(lam)]
             else:
-                out = 0.0
+                out = np.zeros_like(t)
 
             if args.keep_region == 'outer':
                 # Don't want to plot errors in the bumpy region as there are no data points there

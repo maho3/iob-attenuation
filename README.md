@@ -62,3 +62,7 @@ Plot ratio of fluxes - not just the attenuation curve
 # Discussion 17 November
 
 * Need $d \exp(A_\lambda) / d \lambda$ well behaved (transmission function) - want derivative of $F$ to be good
+
+# Discussion 22 January
+
+* Could we ensure that the IOB parameters the bump uses are different from those the outer part uses?
