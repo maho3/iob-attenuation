@@ -37,6 +37,7 @@ class OperonArgs(object):
     
     def __init__(self, ini_file, verbose=True):
         
+        self.ini_file = ini_file
         if verbose: 
             print(f"\nReading from configuration file: {ini_file}")
         if not os.path.isfile(ini_file):
@@ -151,6 +152,7 @@ class SelectionArgs(object):
 
     def __init__(self, ini_file, verbose=True):
         
+        self.ini_file = ini_file
         if verbose: 
             print(f"\nReading from configuration file: {ini_file}")
         if not os.path.isfile(ini_file):
@@ -162,7 +164,10 @@ class SelectionArgs(object):
         self.out_data_dir = config['system']['out_data_dir']
         self.version_num = int(config['system']['version_num'])
         self.in_file = pjoin(self.in_data_dir, config['system']['in_file'])
-        self.exclude_file = pjoin(self.in_data_dir, config['system']['exclude_file'])
+        if config['system']['exclude_file'].lower() == 'none':
+            self.exclude_file = None
+        else:
+            self.exclude_file = pjoin(self.in_data_dir, config['system']['exclude_file'])
 
         self.in_param = config['data']['in_param']
 

@@ -3,8 +3,10 @@ import pandas as pd
 import sys
 import re
 from tqdm import tqdm
+import os
 
 from utils import OperonArgs
+import outer_term
 
 sys.path.insert(0, '../literature_fits')
 import attenuation_curves, fit_literature
@@ -31,13 +33,21 @@ def load_data(args, name):
     fname_outer = f'{args.fit_dir}/{run_name}/{run_name}_outer_{name}.csv'
 
     df_orig = pd.read_csv(fname)
+    print(f'Loaded original data from {fname} with {df_orig.shape[0]} galaxies.')
+    if df_orig.shape[0] == 0:
+        print(f'No galaxies found in {fname}. Skipping.')
+        return np.array([]), np.array([]), np.array([]), np.array([]), np.array([]), np.array([])
 
     # Load data with C0
     run_name = f'{args.in_param}_{str(args.version_num)}'
-    df_outer = pd.read_csv(fname_outer)
-    nx = len(set(df_outer['x'].values))
-    assert int(df_outer.shape[0] / nx) == df_orig.shape[0]
-    C0 = df_outer['C0'].values[::nx]
+    if not os.path.isfile(fname_outer):
+        _, C0, _, _ = outer_term.run_all_gals(args, name)
+        nx = len(C0)
+    else:
+        df_outer = pd.read_csv(fname_outer)
+        nx = len(set(df_outer['x'].values))
+        assert int(df_outer.shape[0] / nx) == df_orig.shape[0]
+        C0 = df_outer['C0'].values[::nx]
 
     # Get initial D values
     # {B0: c13*(IOB1*c14 + c15), B1: IOB2*c16, B2: IOB1*c3 - IOB3*c4, B3: (IOB2*c6 + exp(IOB1*c7))*exp(-IOB3*c10), B4: -IOB2*c9, B5: -IOB2*c11}
@@ -216,29 +226,40 @@ def run_all_gals(args, name):
             'success_newpar': res_newpar["success"],
         })
 
-    # Create dataframe from results
-    df_results = pd.DataFrame(results)
+    if len(galaxy_ids) == 0:
+        df_results = pd.DataFrame(columns=[
+            'galaxy_id', 'los', 'params_2par', 'rmse_2par', 'success_2par',
+            'params_4par', 'rmse_4par', 'success_4par',
+            'params_newpar', 'rmse_newpar', 'success_newpar'
+        ])
+    else:
 
-    # Expand parameter lists into separate columns
-    df_results[['2par_B', '2par_delta']] = pd.DataFrame(df_results['params_2par'].tolist(), index=df_results.index)
-    df_results[['4par_p0', '4par_p1', '4par_p2', '4par_p3']] = pd.DataFrame(df_results['params_4par'].tolist(), index=df_results.index)
-    df_results[['newpar_D0', 'newpar_D1', 'newpar_D2', 'newpar_D3']] = pd.DataFrame(df_results['params_newpar'].tolist(), index=df_results.index)
+        # Create dataframe from results
+        df_results = pd.DataFrame(results)
 
-    # Drop the original parameter list columns
-    df_results = df_results.drop(columns=['params_2par', 'params_4par', 'params_newpar'])
+        # Expand parameter lists into separate columns
+        df_results[['2par_B', '2par_delta']] = pd.DataFrame(df_results['params_2par'].tolist(), index=df_results.index)
+        df_results[['4par_p0', '4par_p1', '4par_p2', '4par_p3']] = pd.DataFrame(df_results['params_4par'].tolist(), index=df_results.index)
+        df_results[['newpar_D0', 'newpar_D1', 'newpar_D2', 'newpar_D3']] = pd.DataFrame(df_results['params_newpar'].tolist(), index=df_results.index)
+
+        # Drop the original parameter list columns
+        df_results = df_results.drop(columns=['params_2par', 'params_4par', 'params_newpar'])
 
     return df_results
 
 
 def main():
 
-    ini_file = 'conf/iob_44.ini'
+    # ini_file = 'conf/iob_44.ini'
+    ini_file = 'conf/iob_47.ini'
     args = OperonArgs(ini_file)
 
     for name in ['train', 'val']:
         df_results = run_all_gals(args, name)
         run_name = f'{args.in_param}_{str(args.version_num)}'
-        fname_out = f'{args.fit_dir}/{run_name}/{run_name}_opt_results_{name}.csv'
+        dirname = f'{args.fit_dir}/{run_name}'
+        os.makedirs(dirname, exist_ok=True)
+        fname_out = f'{dirname}/{run_name}_opt_results_{name}.csv'
         df_results.to_csv(fname_out, index=False)
         print(f'Saved results to {fname_out}')
 

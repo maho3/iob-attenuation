@@ -8,7 +8,10 @@ from utils import OperonArgs
 
 def compute_initial_C(IOB):
     c = [0.908373, 0.748169, 0.944124, 59.20784, 5.327414, 0.010842]
-    B0 = c[0]*np.log(IOB[0]*c[3] + c[4])
+    B0 = IOB[0]*c[3] + c[4]
+    m = B0 > 0
+    B0[m] = c[0]*np.log(B0[m])
+    B0[~m] = np.nan
     C0 = B0 * np.log(10)
     return C0
 
@@ -36,6 +39,8 @@ def load_data(args, run):
 
     # Reshape so each galaxy is its own row
     nx = len(np.unique(x))
+    if nx == 0:
+        return np.array([]), np.array([]), np.array([])
     n_gal = IOB.shape[0] // nx
     IOB_reshaped = IOB.reshape((n_gal, nx, len(IOB_cols)))
     x_reshaped = x.reshape((n_gal, nx))
@@ -64,6 +69,9 @@ def optimise_gal(x, C0_init, A_true):
     C0_opt = res.x[0]
     if not res.success:
         print('Warning: optimisation did not converge:', res.message)
+        print(f'Initial loss: {loss_init:.6f}')
+        print(f'Initial C0: {C0_init:.6f}, Optimised C0: {C0_opt:.6f}')
+        quit()
     loss_opt = loss_fun_b(C0_opt, x, A_true)
 
     return C0_opt, loss_init, loss_opt
@@ -72,6 +80,16 @@ def optimise_gal(x, C0_init, A_true):
 def run_all_gals(args, run):
 
     x, C0_init, A_true = load_data(args, run)
+    if C0_init.size == 0:
+        print(f'No galaxies found for {run} data. Skipping.')
+        return np.array([]), np.array([]), np.array([]), np.array([])
+    
+    # For nan values of C0_init, replace with mean of non-nan values
+    nan_mask = np.isnan(C0_init)
+    if np.any(nan_mask):
+        mean_C0 = np.nanmean(C0_init)
+        C0_init[nan_mask] = mean_C0
+        print(f'Warning: Found {np.sum(nan_mask)} NaN values in initial C0. Replaced with mean value {mean_C0:.6f}.')
     n_gal = C0_init.shape[0]
     C0_opt = np.zeros_like(C0_init)
     loss_init = np.zeros(n_gal)
@@ -82,9 +100,8 @@ def run_all_gals(args, run):
 
     return C0_init, C0_opt, loss_init, loss_opt
 
-def main():
-
-    ini_file = 'conf/iob_35.ini'
+def main(ini_file):
+    
     args = OperonArgs(ini_file)
 
     for run in ['train', 'val']:
@@ -103,4 +120,5 @@ def main():
     return
 
 if __name__ == '__main__':
-    main()
+    ini_file = 'conf/iob_35.ini'
+    main(ini_file)

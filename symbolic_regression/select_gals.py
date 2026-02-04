@@ -563,8 +563,11 @@ def select_gals_laura(selection_args):
 
     plot_precut_av(df)
 
-    df_exclude = pd.read_csv(selection_args.exclude_file, sep="\t")
-    ids_to_exclude = df_exclude['galaxy_id'].unique()
+    if selection_args.exclude_file is None:
+        ids_to_exclude = np.array([])
+    else:
+        df_exclude = pd.read_csv(selection_args.exclude_file, sep="\t")
+        ids_to_exclude = df_exclude['galaxy_id'].unique()
 
     CHECK_START   = 61   # inclusive
     CHECK_END     = 70   # inclusive
@@ -642,9 +645,13 @@ def select_gals_random(selection_args):
     print('\nSelecting galaxies using random selection method...\n')
 
     df = load_df(selection_args.in_file)
+    print(df.shape)
 
-    df_exclude = pd.read_csv(selection_args.exclude_file, sep="\t")
-    ids_to_exclude = df_exclude['galaxy_id'].unique()
+    if selection_args.exclude_file is None:
+        ids_to_exclude = np.array([])
+    else:
+        df_exclude = pd.read_csv(selection_args.exclude_file, sep="\t")
+        ids_to_exclude = df_exclude['galaxy_id'].unique()
 
     df_orig = df.copy()
 
@@ -654,8 +661,9 @@ def select_gals_random(selection_args):
     for t, n in zip(['Train', 'Val', 'Test'], [selection_args.ntrain, selection_args.nval, selection_args.ntest]):
 
         print(f"\n--- Selecting {t} set ({n} galaxies) ---")
-
+        print(df.shape)
         df = df[~df['galaxy_id'].isin(ids_to_exclude)].reset_index(drop=True)
+        print(df.shape)
 
         # Get unique galaxy ids
         galaxy_ids = df['galaxy_id'].unique()

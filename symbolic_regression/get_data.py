@@ -18,9 +18,10 @@ def get_data(ini_file, overwrite=False, plot_examples=False):
                      and os.path.exists(args.selection.val_file)
                      and os.path.exists(args.selection.test_file))
 
-    # First sub-sample the data into training, validation, and test sets    
+    # First sub-sample the data into training, validation, and test sets  
     if (not files_exist) or overwrite:
         print('Selecting galaxies for training, validation, and test sets...')
+        print(args.selection.train_file, args.selection.val_file, args.selection.test_file)
 
         if args.selection.method == 'laura':
             df_train, df_val, df_test = select_gals.select_gals_laura(args.selection)
@@ -169,6 +170,8 @@ def get_data(ini_file, overwrite=False, plot_examples=False):
             os.makedirs(out_dirname, exist_ok=True)
             outname = pjoin(out_dirname, f'{args.in_param}_{name}_data.txt')
             output_array = np.loadtxt(outname, skiprows=1)
+            if output_array.ndim == 1:
+                continue  # one or zero examples so ignore
             ngal = len(np.unique(output_array[:,0]))
             lam_arr = np.unique(output_array[:, -2])
             nlam = len(lam_arr)
