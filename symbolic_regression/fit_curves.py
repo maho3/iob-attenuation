@@ -110,6 +110,29 @@ def new_model(x, D0, D1, D2, D3):
     return y
 
 
+def new_model_reparam(x, A0, A1, A2, A3):
+    """
+    The model to be optimised
+
+    Args:
+        x: (N,) input array of lamda/lambda_V
+        A0, A1, A2, A3: Scalars representing the A parameters for this galaxy
+
+    Returns:
+        y: (N,) output array of predicted A(lambda)/A_V
+    """
+
+    c = [0.4002, 285.6, 0.2092, 9.223, 1.016]
+
+    y = (
+        A0 * (np.exp(-c[1] * (x - c[0])**2) - np.exp(-c[1] * (1. - c[0])**2))
+        + (A1 + A2 * (x - c[2])) * (x - c[2]) * (np.exp(-c[3] * x) - np.exp(-c[3]))
+        + np.exp(A3 * (np.tanh(c[4]) - np.tanh(c[4] * x)))
+    )
+
+    return y
+
+
 def optimise_all_fun(lam, Alam_Av, D_init, gal_id, los, lam_min, lam_max, lambda_v=0.5542):
     """
     Optimise all three functions for a given galaxy and line of sight.
@@ -174,7 +197,7 @@ def optimise_all_fun(lam, Alam_Av, D_init, gal_id, los, lam_min, lam_max, lambda
         popt_newpar, success_newpar = fit_literature.run_fit(
                             new_model,
                             x_cut, Alam_Av_arr_cut, 
-                            bounds=([-np.inf,-np.inf,-np.inf,-np.inf],[np.inf,np.inf,np.inf,np.inf]),
+                            bounds=([0,-np.inf,-np.inf,0],[np.inf,np.inf,np.inf,np.inf]),
                             all_p0 = [D_init.tolist()])
         fit_nb = new_model(x_cut, *popt_newpar)
         rmse_newpar = np.sqrt(np.mean((Alam_Av_arr_cut - fit_nb)**2))
@@ -185,7 +208,31 @@ def optimise_all_fun(lam, Alam_Av, D_init, gal_id, los, lam_min, lam_max, lambda
         rmse_newpar = None
     res_newpar = {'params': popt_newpar, 'rmse': rmse_newpar, 'success': success_newpar}
 
-    return res_2par, res_4par, res_newpar
+    # Reparameterised version of my function
+    b = [1.015638351440429688e+00, -9.222948074340820312e+00, 4.451240158081054688e+01,
+         -2.127728118896484375e+02, 4.002230465412139893e-01, 2.856298522949218750e+02]
+    c = [0.4002, 285.6, 0.2092, -9.223, 1.016]
+    A_init = np.empty(4)
+    A_init[0] = D_init[0]
+    A_init[1] = b[3] * (D_init[1] + c[2] * D_init[2])
+    A_init[2] = b[3] * D_init[2]
+    A_init[3] = D_init[3]
+    try:
+        popt_newpar, success_newpar = fit_literature.run_fit(
+                            new_model_reparam,
+                            x_cut, Alam_Av_arr_cut, 
+                            bounds=([0,-np.inf,-np.inf,0],[np.inf,np.inf,np.inf,np.inf]),
+                            all_p0 = [A_init.tolist()])
+        fit_nb = new_model_reparam(x_cut, *popt_newpar)
+        rmse_newpar = np.sqrt(np.mean((Alam_Av_arr_cut - fit_nb)**2))
+    except RuntimeError as e:
+        print(f"Galaxy ID: {gal_id}, LoS: {los}, My function reparam. fit failed with error: {e}")
+        popt_newpar = [None, None, None, None]   
+        success_newpar = False 
+        rmse_newpar = None
+    res_newpar_reparam = {'params': popt_newpar, 'rmse': rmse_newpar, 'success': success_newpar}
+
+    return res_2par, res_4par, res_newpar, res_newpar_reparam
 
 
 def run_all_gals(args, name):
@@ -209,7 +256,7 @@ def run_all_gals(args, name):
     results = []
 
     for i in tqdm(range(len(galaxy_ids))):
-        res_2par, res_4par, res_newpar = optimise_all_fun(
+        res_2par, res_4par, res_newpar, res_newpar_reparam = optimise_all_fun(
             lam_true, ytrue[i,:], D[i,:], galaxy_ids[i], los[i], lam_min, lam_max, args.lambda_V)
         
         results.append({
@@ -224,13 +271,17 @@ def run_all_gals(args, name):
             'params_newpar': res_newpar["params"],
             'rmse_newpar': res_newpar["rmse"],
             'success_newpar': res_newpar["success"],
+            'params_newpar_reparam': res_newpar_reparam["params"],
+            'rmse_newpar_reparam': res_newpar_reparam["rmse"],
+            'success_newpar_reparam': res_newpar_reparam["success"]
         })
 
     if len(galaxy_ids) == 0:
         df_results = pd.DataFrame(columns=[
             'galaxy_id', 'los', 'params_2par', 'rmse_2par', 'success_2par',
             'params_4par', 'rmse_4par', 'success_4par',
-            'params_newpar', 'rmse_newpar', 'success_newpar'
+            'params_newpar', 'rmse_newpar', 'success_newpar',
+            'params_newpar_reparam', 'rmse_newpar_reparam', 'success_newpar_reparam'
         ])
     else:
 
@@ -241,9 +292,10 @@ def run_all_gals(args, name):
         df_results[['2par_B', '2par_delta']] = pd.DataFrame(df_results['params_2par'].tolist(), index=df_results.index)
         df_results[['4par_p0', '4par_p1', '4par_p2', '4par_p3']] = pd.DataFrame(df_results['params_4par'].tolist(), index=df_results.index)
         df_results[['newpar_D0', 'newpar_D1', 'newpar_D2', 'newpar_D3']] = pd.DataFrame(df_results['params_newpar'].tolist(), index=df_results.index)
+        df_results[['newpar_reparam_A0', 'newpar_reparam_A1', 'newpar_reparam_A2', 'newpar_reparam_A3']] = pd.DataFrame(df_results['params_newpar_reparam'].tolist(), index=df_results.index)
 
         # Drop the original parameter list columns
-        df_results = df_results.drop(columns=['params_2par', 'params_4par', 'params_newpar'])
+        df_results = df_results.drop(columns=['params_2par', 'params_4par', 'params_newpar', 'params_newpar_reparam'])
 
     return df_results
 
