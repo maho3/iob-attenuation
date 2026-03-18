@@ -182,3 +182,4 @@ data/iob_codes_plus_Acurve_with_ID_LOS.txt
 *galaxy_sr_optimization_results.csv
 
 symbolic_regression/old/
+data/merged_bestfit_galprops_*.dat
