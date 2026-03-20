@@ -22,6 +22,8 @@ class SelectionArgs(object):
         self.in_param = config['data']['in_param']
         if ',' in self.in_param:
             self.in_param = [s.strip() for s in self.in_param.split(',')]
+        else:
+            self.in_param = [self.in_param.strip()]
 
         # Get dust mixture. Either a string or a list of strings.
         # If a list, we consider all the mixtures in the list for our target

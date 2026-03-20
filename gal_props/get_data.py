@@ -126,11 +126,18 @@ def get_data(ini_file, overwrite=False,):
     df.rename(columns={'#galaxy_id': 'galaxy_id'}, inplace=True)
 
     # Only keep the columns we need for fitting
-    if args.in_param == 'all':
+    if 'gal_props' in args.in_param:
         ignore_pattern = r'^(galaxy_id|los|dust_mixture|Av|c\d+|B_2p|delta_2p|B_\d+|B_\d+s)$'
         cols_to_keep = [col for col in df.columns if not re.match(ignore_pattern, col)]
-    elif isinstance(args.in_param, list):
+        cols_to_keep += [col for col in args.in_param if col != 'gal_props']
+
+        # Remove duplicates while preserving order
+        seen = set()
+        cols_to_keep = [col for col in cols_to_keep if not (col in seen or seen.add(col))]
+
+    else:
         cols_to_keep = args.in_param
+
     # Remove column if equal to target name
     cols_to_keep = [col for col in cols_to_keep if col != args.target_name]
     cols_to_keep = ['galaxy_id', 'los', 'dust_mixture'] + cols_to_keep + [args.target_name]

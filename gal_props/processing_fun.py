@@ -124,7 +124,7 @@ def convert_operon_fun(eq, names, do_replace_floats=True):
     return new_eq, values
 
 
-def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar='RMSE'):
+def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar='RMSE', yscale='log'):
     """
     Make the Pareto front plot
     
@@ -135,6 +135,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
         :loss_max (float, default=None): Maximum value y axis can take
         :print_par_table (bool, default=False): Whether to print each parameter out individually
         :yvar (str, default='RMSE'): The variable to plot on the y axis
+        :yscale (str, default='log'): The scale to use for the y axis. Can be 'log' or 'linear'.
             
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing Pareto front
@@ -180,7 +181,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
                     elif yvar == 'MedAE':
                         yvar_vals[name].append(np.median(np.abs(ytrue - ypred)))
                     elif yvar == 'R2':
-                        yvar_vals[name].append(1 - np.sum((ytrue - ypred) ** 2) / np.sum((ytrue - np.mean(ytrue)) ** 2))
+                        yvar_vals[name].append(np.sum((ytrue - ypred) ** 2) / np.sum((ytrue - np.mean(ytrue)) ** 2))
                     elif yvar == 'MSE':
                         yvar_vals[name].append(np.mean((ytrue - ypred) ** 2))
                     else:
@@ -193,7 +194,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
                   'lnksigma':'log(k_sigma)', 'neff':'n_e', 'C':'C', 'lnsigma':'log(sigma)', 
                   'hyper':'F', 'comoving':'chi'}
     param_dict = {
-        'logMstar[logMsun]': 'log(M_*)', 
+        'logMstar[logMsun]': 'log(M_star)', 
         'logMgas[logMsun]': 
         'log(M_gas)', 
         'SFR[Msun/yr]': 
@@ -211,7 +212,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
        'rstar_young[kpc]': 'r_staryoung', 
        'Mmetals(<rstar_young)[Msun]': 'M_metalsstaryoung',
        'Mmetals(<rstar_old)[Msun]': 'M_metalsstarold', 
-       'Mmetals(<rgas_SF)[Msun]': 'M_metalsgasSF)', 
+       'Mmetals(<rgas_SF)[Msun]': 'M_metalsgasSF', 
        'Mstar[Msun]': 'M_star',
        'Mgas[Msun]': 'M_gas', 
        'Sigma_SFR_10_young[Msun/yr/kpc^2]': 'Sigma_SFR10young',
@@ -222,13 +223,17 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
        'burstiness_ks_young': 'B_ksyoung', 
        'burstiness_ks_old': 'B_ksold', 
        'burstiness_ks_all': 'B_ksall',
-       'rstar_old_over_rgas': 'r_starold_over_r_gas', 
-       'rstar_old_over_rSF': 'r_starold_over_r_gasSF', 
-       'rstar_young_over_rgas': 'r_staryoung_over_r_gas',
-       'rstar_young_over_rSF': 'r_staryoung_over_r_gasSF', 
-       'rstar_old_over_rstar_young': 'r_starold_over_r_staryoung',
-       'Sigma_dust_rgas[Msun/kpc^2]': 'Sigma_dust_rgas',
-       'Av': 'A_V',}
+       'rstar_old_over_rgas': 'r_StarOldOverRgas', 
+       'rstar_old_over_rSF': 'r_StarOldOverRgasSF', 
+       'rstar_young_over_rgas': 'r_StarYoungOverRgas',
+       'rstar_young_over_rSF': 'r_StarYoungOverRgasSF', 
+       'rstar_old_over_rstar_young': 'r_StarOldOverRStaryoung',
+       'Sigma_dust_rgas[Msun/kpc^2]': 'Sigma_DustRgas',
+       'Av': 'A_V',
+       'B_0': 'B_0',
+       'B_1': 'B_1',
+       'B_2': 'B_2',
+       'B_3': 'B_3'}
 
 
     for i, n in enumerate(names):
@@ -267,18 +272,33 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
     ax.plot(x[i], y[i], marker='.', ls='--', color=cmap(1), label='Validation')
     if ax.get_xlim()[1] > args.max_length:
         ax.set_xlim(None, args.max_length)
-    ax.set_yscale('log')
+    ax.set_yscale(yscale)
     if loss_max is not None:
         ylim = list(ax.get_ylim())
         ylim[1] = min(loss_max, ylim[1])
         ax.set_ylim(*ylim)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xlabel('Model Length')
-    ax.set_ylabel(yvar)
+    if yvar == 'R2':
+        ylab = '1 - R2'
+    else:
+        ylab = yvar
+    ax.set_ylabel(ylab)
+    if yvar == 'R2' and yscale == 'linear':
+        # Ensure ylim doesn't extend outside [0, 1]
+        ylim = list(ax.get_ylim())
+        ylim[0] = max(0, ylim[0])
+        ylim[1] = min(1, ylim[1])
+        ax.set_ylim(*ylim)
     ax.legend(loc='upper right')
     
     fig.align_labels()
     fig.tight_layout()
+
+    # Print result for train and validation
+    print(f'\n{ylab} for chosen model:')
+    print(f'Training: {df[f"{yvar}_train"].values[eq_idx]:.4f}')
+    print(f'Validation: {df[f"{yvar}_val"].values[eq_idx]:.4f}')
 
     return fig, ax
 
