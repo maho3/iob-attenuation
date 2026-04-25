@@ -183,6 +183,9 @@ data/iob_codes_plus_Acurve_with_ID_LOS.txt
 
 symbolic_regression/old/
 data/merged_bestfit_galprops_*.dat
+data/for_deg/
+data/dust_data_for_deaglan/
 gal_props/data/
 gal_props/fits/
 gal_props/scripts/queued_scripts/
+symbolic_regression/notebooks/run_*_id_los.txt

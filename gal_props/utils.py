@@ -30,12 +30,15 @@ class SelectionArgs(object):
         self.dust_mixture = config['data']['dust_mixture']
         if ',' in self.dust_mixture:
             self.dust_mixture = [s.strip().upper() for s in self.dust_mixture.split(',')]
+            if 'STELLAR' in self.dust_mixture:
+                self.dust_mixture[self.dust_mixture.index('STELLAR')] = 'stellar'
 
         # Get training, validation and test set sizes
         self.seed = int(config['data']['seed'])
         self.ntrain = int(config['data']['ntrain'])
         self.nval = int(config['data']['nval'])
         self.ntest = int(config['data']['ntest'])
+        self.train_los_max = int(config['data']['train_los_max'])
 
         self.in_data_dir = config['system']['in_data_dir']
         self.out_data_dir = pjoin(config['system']['out_data_dir'], self.target_name)
@@ -66,6 +69,7 @@ class OperonArgs(object):
         self.ntrain = self.selection.ntrain
         self.nval = self.selection.nval
         self.ntest = self.selection.ntest
+        self.train_los_max = self.selection.train_los_max
         self.in_param = self.selection.in_param
 
         # Get the file names for the training, validation and test sets
