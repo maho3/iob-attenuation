@@ -194,16 +194,22 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
                   'lnksigma':'log(k_sigma)', 'neff':'n_e', 'C':'C', 'lnsigma':'log(sigma)', 
                   'hyper':'F', 'comoving':'chi'}
     param_dict = {
-        'logMstar[logMsun]': 'log(M_star)', 
-        'logMgas[logMsun]': 
-        'log(M_gas)', 
-        'SFR[Msun/yr]': 
-        'SFR',
-        'SFR_compact[Msun/yr]': 'SFR_compact', 
-        'Zgas[mass_fraction]': 'Z_gas', 
+        'logMstar[logMsun]': 'log10(M_star)', 
+        'logMstar': 'log10(M_star)',
+        'logMgas[logMsun]': 'log10(M_gas)',
+        'logMgas': 'log10(M_gas)', 
+        'SFR[Msun/yr]': 'SFR',
+        'SFR': 'SFR',
+        'SFR_compact[Msun/yr]': 'SFR_compact',
+        'SFR_compact': 'SFR_compact', 
+        'Zgas[mass_fraction]': 'Z_gas',
+        'Zgas': 'Z_gas', 
         'rstar[kpc]': 'r_star',
+        'Rstar': 'R_star',
        'rgas[kpc]': 'r_gas', 
-       'Mdust_RKC[Msun]': 'M_dust', 
+       'Rgas': 'R_gas',
+       'Mdust_RKC[Msun]': 'M_dust',
+       'logMdust': 'log10(M_dust)', 
        'rgas_SF[kpc]': 'r_gasSF', 
        'Age[yr]': 'Age',
        'SFR_100Myr[Msun]': 'SFR_100Myr', 
@@ -216,6 +222,10 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
        'Mstar[Msun]': 'M_star',
        'Mgas[Msun]': 'M_gas', 
        'Sigma_SFR_10_young[Msun/yr/kpc^2]': 'Sigma_SFR10young',
+       'Sigma_SFR': 'Sigma_SFR',
+       'sSFR': 'sSFR',
+       'inclination_deg': 'i',
+       'inclination_sin': 'sin(i)',
        'Sigma_SFR_100_old[Msun/yr/kpc^2]': 'Sigma_SFR100old', 
        'Sigma_SFR_all[Msun/yr/kpc^2]': 'Sigma_SFRall',
        'Sigma_gas_rgas[Msun/kpc^2]': 'Sigma_gasrgas', 
@@ -232,7 +242,9 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
        'Av': 'A_V',
        'B_0': 'B_0',
        'B_1': 'B_1',
+       'B_1s': 'B_1s',
        'B_2': 'B_2',
+       'B_2s': 'B_2s',
        'B_3': 'B_3'}
 
 
@@ -301,6 +313,84 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
     print(f'Validation: {df[f"{yvar}_val"].values[eq_idx]:.4f}')
 
     return fig, ax
+
+
+def prediction_plots(ini_file, ilen=None, frac_error=True):
+    """
+    Show the difference between the truth and predicted
+
+    Args:
+        :ini_file (str): The path to the ini file containing the run information
+        :ilen (int, default=None): The length of the equation to highlight. If None,
+            then this is taken to be the final equation
+        :frac_error (bool, default=True): Whether to use the fractional error (True) in the plot
+            or absolute error (False).
+
+    Returns:
+        :fig (matplotlib.figure.Figure): Figure containing plot
+        :axs (np.ndarray[matplotlib.pyplot.axis]): Axes of fig containing the plot
+    """
+
+    args = OperonArgs(ini_file)
+
+    run_name = f'{args.target_name}_{str(args.version_num)}'
+    out_dir = pjoin(args.fit_dir, run_name)
+    fname = f'{out_dir}/{run_name}_fun.csv'
+    df = pd.read_csv(fname, delimiter=';')
+
+    if ilen is None:
+        eq_idx = -1
+    else:
+        eq_idx = list(df['Length']).index(ilen)
+    length = list(df['Length'])[eq_idx]
+
+    cmap = plt.get_cmap('Set1')
+
+    fig, axs = plt.subplots(2, 2, figsize=(12,10), sharex=True, sharey='row')
+
+    for i, name in enumerate(['train', 'val']):
+
+        fname = pjoin(out_dir, f'{args.target_name}_{name}_{length}.csv')
+        ytrue, ypred = np.loadtxt(fname, usecols=(-2, -1), unpack=True)
+
+        # axs[0,i].plot( ytrue, ypred, '.', ms=3, color=cmap(i), label=name.capitalize())
+        axs[0,i].hexbin(ytrue, ypred, gridsize=50, mincnt=1, bins='log')
+        if frac_error:
+            error = ypred / ytrue - 1
+        else:
+            error = ypred - ytrue
+        # axs[1,i].plot(ytrue, error, '.', ms=3, color=cmap(i), label=name.capitalize())
+        axs[1,i].hexbin(ytrue, error, gridsize=50, mincnt=1, bins='log')
+
+    for ax in axs[0,:]:
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        x = [min(xlim[0], ylim[0]), max(xlim[1], ylim[1])]
+        ax.plot(x, x, 'k-')
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        if args.fit_logarithm:
+            ax.set_title(f'log10({args.target_name.capitalize()})')
+        else:
+            ax.set_title(args.target_name.capitalize())
+
+    for ax in axs[1,:]:
+        ax.axhline(0, ls='-', color='k')
+
+    if frac_error:
+        axs[1,0].set_ylabel('Fractional error')
+    else:
+        axs[1,0].set_ylabel('Absolute error')
+
+    axs[0,0].set_ylabel('Predicted')
+    for ax in axs[-1,:]:
+        ax.set_xlabel('True')
+
+    fig.tight_layout()
+
+    return fig, axs
+
+
 
 
 # def prediction_plots(ini_file, ilen=None, plot_abs_error=False, frac_error=True):

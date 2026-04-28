@@ -10,7 +10,7 @@ class SelectionArgs(object):
         self.ini_file = ini_file
         self.target_name = target_name
         if verbose: 
-            print(f"\nReading from selection file: {ini_file}")
+            print(f"Reading from selection file: {ini_file}")
         if not os.path.isfile(ini_file):
             raise FileNotFoundError(f"Selection file '{ini_file}' not found.")
         config = configparser.ConfigParser()
@@ -39,6 +39,7 @@ class SelectionArgs(object):
         self.nval = int(config['data']['nval'])
         self.ntest = int(config['data']['ntest'])
         self.train_los_max = int(config['data']['train_los_max'])
+        self.min_av = float(config['data']['min_av'])
 
         self.in_data_dir = config['system']['in_data_dir']
         self.out_data_dir = pjoin(config['system']['out_data_dir'], self.target_name)
@@ -71,7 +72,8 @@ class OperonArgs(object):
         self.ntest = self.selection.ntest
         self.train_los_max = self.selection.train_los_max
         self.in_param = self.selection.in_param
-
+        self.min_av = self.selection.min_av
+        
         # Get the file names for the training, validation and test sets
         self.fit_dir = config['system']['fit_dir']
         self.in_data_dir = self.selection.in_data_dir
@@ -80,6 +82,8 @@ class OperonArgs(object):
         self.train_file = self.selection.train_file
         self.val_file = self.selection.val_file
         self.test_file = self.selection.test_file
+
+        self.fit_logarithm = config['data']['fit_logarithm'].lower() == 'true'
         
         # Operon arguments
         self.allowed_symbols = config['operon']['allowed_symbols']

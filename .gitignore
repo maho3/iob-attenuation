@@ -189,3 +189,4 @@ gal_props/data/
 gal_props/fits/
 gal_props/scripts/queued_scripts/
 symbolic_regression/notebooks/run_*_id_los.txt
+data/deg_final_maybe/

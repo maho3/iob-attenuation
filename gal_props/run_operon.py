@@ -39,6 +39,11 @@ def run_operon(ini_file,):
     X_val = df_val[in_cols].values
     y_val = df_val[args.target_name].values
 
+    if args.fit_logarithm:
+        print('Fitting logarithm of target variable')
+        y_train = np.log10(y_train)
+        y_val = np.log10(y_val)
+
     print('Target:', args.target_name)
     print('Fitting using parameters:', in_cols)
 

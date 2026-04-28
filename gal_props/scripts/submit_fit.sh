@@ -12,7 +12,8 @@ PYCMD="python3 run_operon.py"
 # change this pattern or list of ini files as needed
 shopt -s nullglob
 INIS=(
-  ../conf/Av_0.ini
+  ../conf/B1_2.ini
+  ../conf/Av_2.ini
 )
 if (( ${#INIS[@]} == 0 )); then
   echo "No ini files found" >&2
@@ -39,8 +40,8 @@ EOF
   chmod +x "$WRAPPER"
 
   # build comment and submit - adjust resources as needed
-  COMMENT="Operon ${TAG} (1hr)"
-  addqueue -q cmb -s -n 1x12 -m 5.0 -c "$COMMENT" -e "$WRAPPER"
+  COMMENT="Operon ${TAG} (2hr)"
+  addqueue -q berg -s -n 1x28 -m 5.0 -c "$COMMENT" -e "$WRAPPER"
 
   echo "Submitted $TAG using wrapper $WRAPPER"
 done
