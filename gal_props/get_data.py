@@ -75,6 +75,12 @@ def get_data(ini_file, overwrite=False,):
         data = "".join([header] + out_lines)
         df = pd.read_csv(io.StringIO(data), sep=r'\s+')
 
+        # Remove columns which are in ignore_gal_props
+        if args.ignore_gal_props is not None:
+            cols_to_drop = [col for col in args.ignore_gal_props if col in df.columns]
+            print(f"\tDropping columns: {cols_to_drop}")
+            df.drop(columns=cols_to_drop, inplace=True)
+
         # Cut curves which do not meet min_av criterion
         old_len = df.shape[0]
         mask = np.isfinite(df[full_Av_name]) & (df[full_Av_name] >= args.min_av)
@@ -205,6 +211,7 @@ if __name__ == "__main__":
     # get_data(args.config_path, overwrite=True)
     all_config = os.listdir('conf')
     all_config = [f for f in all_config if not f.startswith('selection_') and f.endswith('.ini')]
+    all_config = ['Av_4.ini', 'B1_3.ini', 'B3_3.ini']
     for config in all_config:
-        get_data(os.path.join('conf', config), overwrite=True)
+        get_data(os.path.join('conf', config), overwrite=False)
     

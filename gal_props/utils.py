@@ -33,6 +33,16 @@ class SelectionArgs(object):
             if 'STELLAR' in self.dust_mixture:
                 self.dust_mixture[self.dust_mixture.index('STELLAR')] = 'stellar'
 
+        # If selection specifies galaxy properties to ignore, we ignore them
+        if 'ignore_gal_props' in config['data']:
+            self.ignore_gal_props = config['data']['ignore_gal_props']
+            if ',' in self.ignore_gal_props:
+                self.ignore_gal_props = [s.strip() for s in self.ignore_gal_props.split(',')]
+            else:
+                self.ignore_gal_props = [self.ignore_gal_props.strip()]
+        else:
+            self.ignore_gal_props = []
+
         # Get training, validation and test set sizes
         self.seed = int(config['data']['seed'])
         self.ntrain = int(config['data']['ntrain'])
@@ -73,6 +83,7 @@ class OperonArgs(object):
         self.train_los_max = self.selection.train_los_max
         self.in_param = self.selection.in_param
         self.min_av = self.selection.min_av
+        self.ignore_gal_props = self.selection.ignore_gal_props
         
         # Get the file names for the training, validation and test sets
         self.fit_dir = config['system']['fit_dir']

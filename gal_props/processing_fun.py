@@ -312,6 +312,11 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
     print(f'Training: {df[f"{yvar}_train"].values[eq_idx]:.4f}')
     print(f'Validation: {df[f"{yvar}_val"].values[eq_idx]:.4f}')
 
+    if yvar == 'R2':
+        print(f'\n{yvar} for chosen model:')
+        print(f'Training: {1 - df[f"{yvar}_train"].values[eq_idx]:.4f}')
+        print(f'Validation: {1 - df[f"{yvar}_val"].values[eq_idx]:.4f}')
+
     return fig, ax
 
 
@@ -362,7 +367,7 @@ def prediction_plots(ini_file, ilen=None, frac_error=True):
         # axs[1,i].plot(ytrue, error, '.', ms=3, color=cmap(i), label=name.capitalize())
         axs[1,i].hexbin(ytrue, error, gridsize=50, mincnt=1, bins='log')
 
-    for ax in axs[0,:]:
+    for name, ax in zip(['train', 'val'], axs[0,:]):
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
         x = [min(xlim[0], ylim[0]), max(xlim[1], ylim[1])]
@@ -370,9 +375,9 @@ def prediction_plots(ini_file, ilen=None, frac_error=True):
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         if args.fit_logarithm:
-            ax.set_title(f'log10({args.target_name.capitalize()})')
+            ax.set_title(f'log10({args.target_name.capitalize()}): {name.capitalize()}')
         else:
-            ax.set_title(args.target_name.capitalize())
+            ax.set_title(f'{args.target_name.capitalize()}: {name.capitalize()}')
 
     for ax in axs[1,:]:
         ax.axhline(0, ls='-', color='k')
