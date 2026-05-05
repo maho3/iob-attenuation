@@ -94,6 +94,22 @@ class OperonArgs(object):
         self.val_file = self.selection.val_file
         self.test_file = self.selection.test_file
 
+        # For dust mixtures inthe order of self.dust_mixture, see if we have
+        # a grain size parameter stored in the ini file
+        if 'grain_size_param' in config['data']:
+            self.grain_size_param = config['data']['grain_size_param']
+            if ',' in self.grain_size_param:
+                self.grain_size_param = [s.strip() for s in self.grain_size_param.split(',')]
+            else:
+                self.grain_size_param = [self.grain_size_param.strip()]
+            # Check that the number of grain size parameters matches the number of dust mixtures
+            if len(self.grain_size_param) != len(self.dust_mixture):
+                raise ValueError(f"Number of grain size parameters ({len(self.grain_size_param)}) does not match number of dust mixtures ({len(self.dust_mixture)}).")
+            # Turn into a dictionary mapping dust mixture to grain size parameter
+            self.grain_size_param = {dm: float(gsp) for dm, gsp in zip(self.dust_mixture, self.grain_size_param)}
+        else:
+            self.grain_size_param = None
+
         self.fit_logarithm = config['data']['fit_logarithm'].lower() == 'true'
         
         # Operon arguments

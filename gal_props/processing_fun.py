@@ -320,7 +320,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
     return fig, ax
 
 
-def prediction_plots(ini_file, ilen=None, frac_error=True):
+def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False):
     """
     Show the difference between the truth and predicted
 
@@ -330,6 +330,7 @@ def prediction_plots(ini_file, ilen=None, frac_error=True):
             then this is taken to be the final equation
         :frac_error (bool, default=True): Whether to use the fractional error (True) in the plot
             or absolute error (False).
+        :log_target (bool, default=False): Whether to plot log10 of the target variable instead of the target variable itself. 
 
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing plot
@@ -356,16 +357,25 @@ def prediction_plots(ini_file, ilen=None, frac_error=True):
     for i, name in enumerate(['train', 'val']):
 
         fname = pjoin(out_dir, f'{args.target_name}_{name}_{length}.csv')
+        print(fname)
         ytrue, ypred = np.loadtxt(fname, usecols=(-2, -1), unpack=True)
 
+        if log_target:
+            axs[0,i].hexbin(np.log10(ytrue), np.log10(ypred), gridsize=50, mincnt=1, bins='log')
+        else:
+            axs[0,i].hexbin(ytrue, ypred, gridsize=50, mincnt=1, bins='log')
         # axs[0,i].plot( ytrue, ypred, '.', ms=3, color=cmap(i), label=name.capitalize())
-        axs[0,i].hexbin(ytrue, ypred, gridsize=50, mincnt=1, bins='log')
+        
+        print('True range:', np.min(ytrue), np.max(ytrue))
         if frac_error:
             error = ypred / ytrue - 1
         else:
             error = ypred - ytrue
         # axs[1,i].plot(ytrue, error, '.', ms=3, color=cmap(i), label=name.capitalize())
-        axs[1,i].hexbin(ytrue, error, gridsize=50, mincnt=1, bins='log')
+        if log_target:
+            axs[1,i].hexbin(np.log10(ytrue), error, gridsize=50, mincnt=1, bins='log')
+        else:
+            axs[1,i].hexbin(ytrue, error, gridsize=50, mincnt=1, bins='log')
 
     for name, ax in zip(['train', 'val'], axs[0,:]):
         xlim = ax.get_xlim()

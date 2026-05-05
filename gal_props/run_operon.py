@@ -31,8 +31,28 @@ def run_operon(ini_file,):
     df_train = pd.read_csv(args.train_file, sep='\t')
     df_val = pd.read_csv(args.val_file, sep='\t')
 
-    in_cols = df_train.columns.drop(['galaxy_id', 'los', 'dust_mixture', args.target_name])
+    to_drop = ['galaxy_id', 'los', args.target_name]
+    if 'dust_mixture' not in args.in_param:
+        to_drop.append('dust_mixture')
+    in_cols = df_train.columns.drop(to_drop)
     print('Input columns:', in_cols)
+
+    print('\nUnique dust mixtures in train:', set(df_train['dust_mixture']))
+    if len(set(df_train['dust_mixture'])) > 1:
+        # FInd how many of each dust mixture we have in the training set
+        dust_counts = df_train['dust_mixture'].value_counts()
+        print('Dust mixture counts in train:', dust_counts)
+    print('\nUnique dust mixtures in val:', set(df_val['dust_mixture']))
+    if len(set(df_val['dust_mixture'])) > 1:
+        # FInd how many of each dust mixture we have in the validation set
+        dust_counts = df_val['dust_mixture'].value_counts()
+        print('Dust mixture counts in val:', dust_counts)
+
+    if 'dust_mixture' in in_cols:
+        # Replace the string values in the dust_mixture column with numerical values
+        # using the dictionary args.grain_size_param
+        df_train['dust_mixture'] = df_train['dust_mixture'].map(args.grain_size_param)
+        df_val['dust_mixture'] = df_val['dust_mixture'].map(args.grain_size_param)
 
     X_train = df_train[in_cols].values
     y_train = df_train[args.target_name].values

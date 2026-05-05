@@ -188,5 +188,6 @@ data/dust_data_for_deaglan/
 gal_props/data/
 gal_props/fits/
 gal_props/scripts/queued_scripts/
+gal_props/bad_mixture_runs/
 symbolic_regression/notebooks/run_*_id_los.txt
 data/deg_final_maybe/

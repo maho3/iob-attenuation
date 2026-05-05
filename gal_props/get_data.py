@@ -54,6 +54,7 @@ def get_data(ini_file, overwrite=False,):
     for dust_mixture in all_dust_mixtures:
 
         fname = os.path.join(args.in_data_dir, f'iob_codes_plus_Acurve_galprop_{dust_mixture}_all.dat')
+        print(fname)
 
         # Only load the galaxy_id column to find the rows corresponding to the selected galaxy_ids
         df = pd.read_csv(fname, sep=r'\s+', usecols=["galaxy_id"])
@@ -95,13 +96,6 @@ def get_data(ini_file, overwrite=False,):
     df = pd.concat(all_df, ignore_index=True)
     print(f"\nNumber of rows in combined dataframe: {df.shape[0]}")
 
-    # Remove any rows which contains NaN values in any column
-    df.dropna(inplace=True)
-
-    print(f"Number of rows after removing NaN values: {df.shape[0]}")
-
-    # df.rename(columns={'#galaxy_id': 'galaxy_id'}, inplace=True)
-
     # Only keep the columns we need for fitting
     if 'gal_props' in args.in_param:
         ignore_pattern = r'^(galaxy_id|los|dust_mixture|Av|c\d+|B_2p|delta_2p|B_\d+|B_\d+s|A_\d+A|IOB\d+)$'
@@ -119,6 +113,10 @@ def get_data(ini_file, overwrite=False,):
         cols_to_keep.remove('Av')
         cols_to_keep.append(full_Av_name)
 
+    # We will get dust_mixture anyway, so let's remove it from cols_to_keep if it's there to avoid duplication
+    if 'dust_mixture' in cols_to_keep:
+        cols_to_keep.remove('dust_mixture')
+
     if args.target_name == 'Av':
         cols_to_keep = [col for col in cols_to_keep if col != full_Av_name]
         cols_to_keep = ['galaxy_id', 'los', 'dust_mixture'] + cols_to_keep + [full_Av_name]
@@ -127,6 +125,10 @@ def get_data(ini_file, overwrite=False,):
         cols_to_keep = [col for col in cols_to_keep if col != args.target_name]
         cols_to_keep = ['galaxy_id', 'los', 'dust_mixture'] + cols_to_keep + [args.target_name]
     df = df[cols_to_keep]
+
+    # Remove any rows which contains NaN values in any column
+    df.dropna(inplace=True)
+    print(f"Number of rows after removing NaN values: {df.shape[0]}")
 
     # Now rename 'A_5542A' to 'Av' if it's in the dataframe
     if full_Av_name in df.columns:
@@ -140,6 +142,8 @@ def get_data(ini_file, overwrite=False,):
         if 'inclination_deg' in cols_to_keep:
             i = cols_to_keep.index('inclination_deg')
             cols_to_keep[i] = 'inclination_sin'
+
+    print('All dust:', df['dust_mixture'].unique())
 
     # Split by los value: rows with los < train_los_max are eligible for training;
     # rows with los >= train_los_max are eligible for validation and test.
@@ -211,7 +215,8 @@ if __name__ == "__main__":
     # get_data(args.config_path, overwrite=True)
     all_config = os.listdir('conf')
     all_config = [f for f in all_config if not f.startswith('selection_') and f.endswith('.ini')]
-    all_config = ['Av_4.ini', 'B1_3.ini', 'B3_3.ini']
+    # all_config = ['Av_4.ini', 'B1_3.ini', 'B3_3.ini']
+    # all_config = ['B0_12.ini']
     for config in all_config:
         get_data(os.path.join('conf', config), overwrite=False)
     
