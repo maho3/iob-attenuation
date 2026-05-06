@@ -2,6 +2,7 @@ import numpy as np
 import sympy
 import string
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 from matplotlib.ticker import MaxNLocator
 from matplotlib import rcParams
 import pandas as pd
@@ -124,7 +125,7 @@ def convert_operon_fun(eq, names, do_replace_floats=True):
     return new_eq, values
 
 
-def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar='RMSE', yscale='log'):
+def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar='RMSE', yscale='log', min_true=None, max_true=None):
     """
     Make the Pareto front plot
     
@@ -136,7 +137,11 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
         :print_par_table (bool, default=False): Whether to print each parameter out individually
         :yvar (str, default='RMSE'): The variable to plot on the y axis
         :yscale (str, default='log'): The scale to use for the y axis. Can be 'log' or 'linear'.
-            
+        :min_true (float, default=None): Minimum value for data values,
+            setting both the limits of the plot and the metric to consider
+        :max_true (float, default=None): Maximum value for data values,
+            setting both the limits of the plot and the metric to consider
+
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing Pareto front
         :ax (matplotlib.pyplot.axis): Axis of fig containing the Pareto front
@@ -162,8 +167,8 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
         reader = csv.reader(f, delimiter='\t')
         names = reader.__next__()
 
-    if yvar + '_train' not in df.columns or yvar + '_test' not in df.columns:
-        if yvar == 'RMSE' and 'MSE_train' in df.columns and 'MSE_val' in df.columns:
+    if yvar + '_train' not in df.columns or yvar + '_test' not in df.columns or min_true is not None:
+        if yvar == 'RMSE' and 'MSE_train' in df.columns and 'MSE_val' in df.columns and min_true is None:
             df['RMSE_train'] = np.sqrt(df['MSE_train'])
             df['RMSE_val'] = np.sqrt(df['MSE_val'])
         else:
@@ -174,6 +179,14 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
                 for name in ['train', 'val']:
                     fname = pjoin(out_dir, f'{args.target_name}_{name}_{length}.csv')
                     ytrue, ypred = np.loadtxt(fname, usecols=(-2, -1), unpack=True)
+                    if min_true is not None:
+                        mask_min = ytrue >= min_true
+                        ytrue = ytrue[mask_min]
+                        ypred = ypred[mask_min]
+                    if max_true is not None:
+                        mask_max = ytrue <= max_true
+                        ytrue = ytrue[mask_max]
+                        ypred = ypred[mask_max]
                     if yvar == 'RMSE':
                         yvar_vals[name].append(np.sqrt(np.mean((ytrue - ypred) ** 2)))
                     elif yvar == 'MAE':
@@ -186,6 +199,10 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
                         yvar_vals[name].append(np.mean((ytrue - ypred) ** 2))
                     else:
                         raise ValueError(f'Unknown yvar: {yvar}')
+            if min_true is not None:
+                print(f"For {name} data, removing {np.sum(~mask_min)} of {len(ytrue)} points with true value < {min_true}")
+            if max_true is not None:
+                print(f"For {name} data, removing {np.sum(~mask_max)} of {len(ytrue)} points with true value > {max_true}")
             df[yvar + '_train'] = yvar_vals['train']
             df[yvar + '_val'] = yvar_vals['val']
         
@@ -320,7 +337,7 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
     return fig, ax
 
 
-def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False):
+def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False, min_true=None, max_true=None):
     """
     Show the difference between the truth and predicted
 
@@ -331,6 +348,8 @@ def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False):
         :frac_error (bool, default=True): Whether to use the fractional error (True) in the plot
             or absolute error (False).
         :log_target (bool, default=False): Whether to plot log10 of the target variable instead of the target variable itself. 
+        :min_true (float, default=None): Minimum value for true data values
+        :max_true (float, default=None): Maximum value for true data values
 
     Returns:
         :fig (matplotlib.figure.Figure): Figure containing plot
@@ -352,7 +371,8 @@ def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False):
 
     cmap = plt.get_cmap('Set1')
 
-    fig, axs = plt.subplots(2, 2, figsize=(12,10), sharex=True, sharey='row')
+    fig, axs = plt.subplots(2, 2, figsize=(9, 7.5), sharex=True, sharey='row')
+    hexbins_by_column = {0: [], 1: []}
 
     for i, name in enumerate(['train', 'val']):
 
@@ -360,10 +380,23 @@ def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False):
         print(fname)
         ytrue, ypred = np.loadtxt(fname, usecols=(-2, -1), unpack=True)
 
+        if min_true is not None:
+            mask = ytrue >= min_true
+            ytrue = ytrue[mask]
+            ypred = ypred[mask]
+            print(f"For {name} data, removing {np.sum(~mask)} of {len(ytrue)} points with true value < {min_true}")
+
+        if max_true is not None:
+            mask = ytrue <= max_true
+            ytrue = ytrue[mask]
+            ypred = ypred[mask]
+            print(f"For {name} data, removing {np.sum(~mask)} of {len(ytrue)} points with true value > {max_true}")
+
         if log_target:
-            axs[0,i].hexbin(np.log10(ytrue), np.log10(ypred), gridsize=50, mincnt=1, bins='log')
+            hb = axs[0,i].hexbin(np.log10(ytrue), np.log10(ypred), gridsize=50, mincnt=1, bins='log')
         else:
-            axs[0,i].hexbin(ytrue, ypred, gridsize=50, mincnt=1, bins='log')
+            hb = axs[0,i].hexbin(ytrue, ypred, gridsize=50, mincnt=1, bins='log')
+        hexbins_by_column[i].append((hb, axs[0,i]))
         # axs[0,i].plot( ytrue, ypred, '.', ms=3, color=cmap(i), label=name.capitalize())
         
         print('True range:', np.min(ytrue), np.max(ytrue))
@@ -373,9 +406,18 @@ def prediction_plots(ini_file, ilen=None, frac_error=True, log_target=False):
             error = ypred - ytrue
         # axs[1,i].plot(ytrue, error, '.', ms=3, color=cmap(i), label=name.capitalize())
         if log_target:
-            axs[1,i].hexbin(np.log10(ytrue), error, gridsize=50, mincnt=1, bins='log')
+            hb = axs[1,i].hexbin(np.log10(ytrue), error, gridsize=50, mincnt=1, bins='log')
         else:
-            axs[1,i].hexbin(ytrue, error, gridsize=50, mincnt=1, bins='log')
+            hb = axs[1,i].hexbin(ytrue, error, gridsize=50, mincnt=1, bins='log')
+        hexbins_by_column[i].append((hb, axs[1,i]))
+
+    for column_hexbins in hexbins_by_column.values():
+        max_count = max(np.max(np.asarray(hb.get_array())) for hb, _ in column_hexbins)
+        norm = LogNorm(vmin=1, vmax=max(2, max_count))
+        for hb, ax in column_hexbins:
+            hb.set_norm(norm)
+            hb.set_clim(1, max(2, max_count))
+            fig.colorbar(hb, ax=ax)
 
     for name, ax in zip(['train', 'val'], axs[0,:]):
         xlim = ax.get_xlim()

@@ -35,22 +35,22 @@ INIS=(
   # ../conf/B3_5.ini
   # ../conf/B3_6.ini
   # ../conf/B3_7.ini
-  ../conf/B0_0.ini
-  ../conf/B0_1.ini
-  ../conf/B0_2.ini
-  ../conf/B0_3.ini
-  ../conf/B0_4.ini
-  ../conf/B0_5.ini
-  ../conf/B0_6.ini
-  ../conf/B0_7.ini
-  ../conf/B0_8.ini
-  ../conf/B0_9.ini
-  ../conf/B0_10.ini
-  ../conf/B0_11.ini
-  ../conf/B0_12.ini
-  ../conf/B0_13.ini
-  ../conf/B0_14.ini
-  ../conf/B0_15.ini
+  # ../conf/B0_0.ini
+  # ../conf/B0_1.ini
+  # ../conf/B0_2.ini
+  # ../conf/B0_3.ini
+  # ../conf/B0_4.ini
+  # ../conf/B0_5.ini
+  # ../conf/B0_6.ini
+  # ../conf/B0_7.ini
+  # ../conf/B0_8.ini
+  # ../conf/B0_9.ini
+  # ../conf/B0_10.ini
+  # ../conf/B0_11.ini
+  # ../conf/B0_12.ini
+  # ../conf/B0_13.ini
+  # ../conf/B0_14.ini
+  # ../conf/B0_15.ini
   # ../conf/B2_0.ini
   # ../conf/B2_1.ini
   # ../conf/B2_2.ini
@@ -67,6 +67,8 @@ INIS=(
   # ../conf/B2_13.ini
   # ../conf/B2_14.ini
   # ../conf/B2_15.ini
+  ../conf/B2_16.ini
+  ../conf/B2_17.ini
 )
 if (( ${#INIS[@]} == 0 )); then
   echo "No ini files found" >&2
@@ -94,7 +96,7 @@ EOF
 
   # build comment and submit - adjust resources as needed
   COMMENT="Operon ${TAG} (2hr)"
-  addqueue -q cmb -s -n 1x24 -m 5.0 -c "$COMMENT" -e "$WRAPPER"
+  addqueue -q berg -s -n 1x28 -m 5.0 -c "$COMMENT" -e "$WRAPPER"
 
   echo "Submitted $TAG using wrapper $WRAPPER"
 done
