@@ -262,7 +262,8 @@ def plot_pareto(ini_file, ilen=None, loss_max=None, print_par_table=False, yvar=
        'B_1s': 'B_1s',
        'B_2': 'B_2',
        'B_2s': 'B_2s',
-       'B_3': 'B_3'}
+       'B_3': 'B_3',
+       'dust_mixture': 'f'}
 
 
     for i, n in enumerate(names):

@@ -20,6 +20,10 @@ INIS=(
   # ../conf/Av_5.ini
   # ../conf/Av_6.ini
   # ../conf/Av_7.ini
+  # ../conf/Av_8.ini
+  # ../conf/Av_9.ini
+  # ../conf/Av_10.ini
+  # ../conf/Av_11.ini
   # ../conf/B1_0.ini
   # ../conf/B1_1.ini
   # ../conf/B1_2.ini
@@ -27,6 +31,10 @@ INIS=(
   # ../conf/B1_4.ini
   # ../conf/B1_5.ini
   # ../conf/B1_6.ini
+  # ../conf/B1_7.ini
+  # ../conf/B1_8.ini
+  ../conf/B1_9.ini
+  ../conf/B1_10.ini
   # ../conf/B3_0.ini
   # ../conf/B3_1.ini
   # ../conf/B3_2.ini
@@ -51,6 +59,10 @@ INIS=(
   # ../conf/B0_13.ini
   # ../conf/B0_14.ini
   # ../conf/B0_15.ini
+  # ../conf/B0_16.ini
+  # ../conf/B0_17.ini
+  # ../conf/B0_18.ini
+  # ../conf/B0_19.ini
   # ../conf/B2_0.ini
   # ../conf/B2_1.ini
   # ../conf/B2_2.ini
@@ -67,8 +79,8 @@ INIS=(
   # ../conf/B2_13.ini
   # ../conf/B2_14.ini
   # ../conf/B2_15.ini
-  ../conf/B2_16.ini
-  ../conf/B2_17.ini
+  # ../conf/B2_16.ini
+  # ../conf/B2_17.ini
 )
 if (( ${#INIS[@]} == 0 )); then
   echo "No ini files found" >&2
