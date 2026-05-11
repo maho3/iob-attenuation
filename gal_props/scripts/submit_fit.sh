@@ -33,8 +33,8 @@ INIS=(
   # ../conf/B1_6.ini
   # ../conf/B1_7.ini
   # ../conf/B1_8.ini
-  ../conf/B1_9.ini
-  ../conf/B1_10.ini
+  # ../conf/B1_9.ini
+  # ../conf/B1_10.ini
   # ../conf/B3_0.ini
   # ../conf/B3_1.ini
   # ../conf/B3_2.ini
@@ -43,6 +43,10 @@ INIS=(
   # ../conf/B3_5.ini
   # ../conf/B3_6.ini
   # ../conf/B3_7.ini
+  ../conf/B3_8.ini
+  ../conf/B3_9.ini
+  ../conf/B3_10.ini
+  ../conf/B3_11.ini
   # ../conf/B0_0.ini
   # ../conf/B0_1.ini
   # ../conf/B0_2.ini
