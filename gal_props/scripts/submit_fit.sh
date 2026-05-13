@@ -24,6 +24,8 @@ INIS=(
   # ../conf/Av_9.ini
   # ../conf/Av_10.ini
   # ../conf/Av_11.ini
+  ../conf/Av_12.ini
+  ../conf/Av_13.ini
   # ../conf/B1_0.ini
   # ../conf/B1_1.ini
   # ../conf/B1_2.ini
@@ -35,6 +37,8 @@ INIS=(
   # ../conf/B1_8.ini
   # ../conf/B1_9.ini
   # ../conf/B1_10.ini
+  ../conf/B1_11.ini
+  ../conf/B1_12.ini
   # ../conf/B3_0.ini
   # ../conf/B3_1.ini
   # ../conf/B3_2.ini
@@ -43,10 +47,12 @@ INIS=(
   # ../conf/B3_5.ini
   # ../conf/B3_6.ini
   # ../conf/B3_7.ini
-  ../conf/B3_8.ini
-  ../conf/B3_9.ini
-  ../conf/B3_10.ini
-  ../conf/B3_11.ini
+  # ../conf/B3_8.ini
+  # ../conf/B3_9.ini
+  # ../conf/B3_10.ini
+  # ../conf/B3_11.ini
+  ../conf/B3_12.ini
+  ../conf/B3_13.ini
   # ../conf/B0_0.ini
   # ../conf/B0_1.ini
   # ../conf/B0_2.ini
@@ -112,7 +118,7 @@ EOF
 
   # build comment and submit - adjust resources as needed
   COMMENT="Operon ${TAG} (2hr)"
-  addqueue -q berg -s -n 1x28 -m 5.0 -c "$COMMENT" -e "$WRAPPER"
+  addqueue -q berg -s -n 1x24 -m 3.5 -c "$COMMENT" -e "$WRAPPER"
 
   echo "Submitted $TAG using wrapper $WRAPPER"
 done

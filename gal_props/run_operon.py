@@ -31,6 +31,16 @@ def run_operon(ini_file,):
     df_train = pd.read_csv(args.train_file, sep='\t')
     df_val = pd.read_csv(args.val_file, sep='\t')
 
+    # Correct the sSFR column if needed
+    # Units are 1e10 yr^-1 to make O(1)
+    if args.correct_ssfr:
+        print('Correcting sSFR values')
+        df_train['sSFR'] = df_train['SFR'] / 10.**df_train['logMstar'] * 1e10
+        df_val['sSFR'] = df_val['SFR'] / 10.**df_val['logMstar'] * 1e10
+        print('Median sSFR after correction:', np.median(df_train['sSFR'].values))
+        print('Min sSFR after correction:', np.min(df_train['sSFR'].values[df_train['sSFR'].values > 0]))
+        print('Max sSFR after correction:', np.max(df_train['sSFR'].values))
+
     to_drop = ['galaxy_id', 'los', args.target_name]
     if 'dust_mixture' not in args.in_param:
         to_drop.append('dust_mixture')

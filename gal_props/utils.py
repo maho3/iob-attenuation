@@ -110,6 +110,12 @@ class OperonArgs(object):
         else:
             self.grain_size_param = None
 
+        # See if we are meant to correct the sSFR column
+        if 'correct_ssfr' in config['data']:
+            self.correct_ssfr = config['data']['correct_ssfr'].lower() == 'true'
+        else:
+            self.correct_ssfr = False
+
         self.fit_logarithm = config['data']['fit_logarithm'].lower() == 'true'
         
         # Operon arguments
