@@ -1,17 +1,15 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import scipy.optimize
-from functools import reduce
 import os
-from mpi4py import MPI
+import sys
 from itertools import chain
+
+import numpy as np
+import pandas as pd
+from mpi4py import MPI
 from tqdm import tqdm
 
-import sys
-
 sys.path.insert(0, "../literature_fits")
-import attenuation_curves, fit_literature
+import attenuation_curves
+import fit_literature
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -32,8 +30,6 @@ def get_data(
     )
 
     df = pd.read_csv(fname, sep="\t", header=0)
-
-    lam_V = float(full_Av_name[2:-1])
 
     # Read wavelengths and attenuation curves
     use_cols = [x for x in df.columns if x.startswith("A_")]
@@ -209,7 +205,7 @@ def main():
 
     dust_mixture = "MW"
     dirname = (
-        "/mnt/users/deaglan/symbolic_regression/iob-attenuation/data/deg_final_maybe"
+        "../data/deg_final_maybe"
     )
 
     # Load data
@@ -230,9 +226,15 @@ def main():
     A_V_local = comm.scatter(av_chunks, root=0)
     SB26_pars_local = comm.scatter(sb_chunks, root=0)
 
-    id_local = id_local[:3]
+    if rank == 0:
+        print(f"Total number of galaxies: {len(id_data)}", flush=True)
+        print(f"Number of galaxies per process: {len(id_local)}", flush=True)
+    comm.Barrier()
 
-    for idx in tqdm(range(len(id_local)), desc=f"Rank {rank} processing galaxies", disable=(rank != 0)):
+    id_local = id_local[:300].astype(int)
+    A_V_local = A_V_local[:300]
+
+    for idx in tqdm(range(len(id_local)), desc="Processing galaxies", disable=(rank != 0)):
 
         gid = id_local[idx, 0]
         los = id_local[idx, 1]
@@ -243,17 +245,24 @@ def main():
             lam, gid, los, A_over_Av_gal, SB26_pars_gal, dust_mixture
         )
 
-        arr = [list(r['params']) + [r['rmse'], r['success']] for r in [
+        arr = [
+            [
+                *(value if value is not None else np.nan for value in r["params"]),
+                r["rmse"] if r["rmse"] is not None else np.nan,
+                bool(r["success"]),
+            ]
+            for r in [
                         res_4par, res_2par, res_SB26, res_SB26_from_4par, res_SB26_from_2par
-                    ]]
+                    ]
+        ]
         arr = list(chain.from_iterable(arr))
 
         if idx == 0:
-            res_local = np.zeros((len(id_local), len(arr)))
+            res_local = np.empty((len(id_local), len(arr)), dtype=object)
         res_local[idx] = arr.copy()
 
     res_local = np.array(res_local)
-    output_local = np.hstack((id_local, res_local))
+    output_local = np.hstack((id_local, A_V_local[:, np.newaxis], res_local))
 
     comm.Barrier()
 
@@ -264,13 +273,38 @@ def main():
         if rank == r:
             print(f"Rank {rank} writing results to {out_fnam}", flush=True)
 
-        # Delete file if it exists and rank is 0
-        if rank == 0 and r == 0 and os.path.exists(out_fnam):
-            os.remove(out_fnam)
+            # Delete file if it exists and rank is 0
+            if rank == 0 and os.path.exists(out_fnam):
+                os.remove(out_fnam)
 
-        # Append results to the file
-        with open(out_fnam, "a") as f:
-            np.savetxt(f, output_local, delimiter=" ", fmt="%.6f")
+            # Add header to the file if rank is 0
+            if rank == 0:
+                header = (
+                    "galaxy_id los A_V "
+                    "4par_c1 4par_c2 4par_c3 4par_c4 4par_rmse 4par_success "
+                    "2par_B 2par_delta 2par_rmse 2par_success "
+                    "SB26_B0 SB26_B1s SB26_B2s SB26_B3 SB26_rmse SB26_success "
+                    "SB26_from_4par_B0 SB26_from_4par_B1s SB26_from_4par_B2s SB26_from_4par_B3 SB26_from_4par_rmse SB26_from_4par_success "
+                    "SB26_from_2par_B0 SB26_from_2par_B1s SB26_from_2par_B2s SB26_from_2par_B3 SB26_from_2par_rmse SB26_from_2par_success"
+                )
+                with open(out_fnam, "w") as f:
+                    f.write(header + "\n")
+
+            # Append results to the file
+            with open(out_fnam, "a") as f:
+                np.savetxt(
+                    f,
+                    output_local,
+                    delimiter=" ",
+                    fmt=[
+                        "%d",
+                        "%d",
+                        "%.6f",
+                        *(["%.6f"] * 5 + ["%s"]),
+                        *(["%.6f"] * 3 + ["%s"]),
+                        *(["%.6f"] * 5 + ["%s"]) * 3,
+                    ],
+                )
         comm.Barrier()
     
 
