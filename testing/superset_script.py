@@ -203,7 +203,9 @@ def run_fits(lam, gid, los, A_over_Av_gal, SB26_pars_gal, dust_mixture):
 
 def main():
 
-    dust_mixture = "MW"
+    # dust_mixture = "MW"
+    # dust_mixture = "SMC"
+    dust_mixture = "stellar"
     dirname = (
         "../data/deg_final_maybe"
     )
@@ -231,8 +233,8 @@ def main():
         print(f"Number of galaxies per process: {len(id_local)}", flush=True)
     comm.Barrier()
 
-    # id_local = id_local[:300].astype(int)
-    # A_V_local = A_V_local[:300]
+    id_local = id_local[:1000].astype(int)
+    A_V_local = A_V_local[:1000]
 
     for idx in tqdm(range(len(id_local)), desc="Processing galaxies", disable=(rank != 0)):
 
