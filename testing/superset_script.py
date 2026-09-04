@@ -233,8 +233,8 @@ def main():
         print(f"Number of galaxies per process: {len(id_local)}", flush=True)
     comm.Barrier()
 
-    id_local = id_local[:1000].astype(int)
-    A_V_local = A_V_local[:1000]
+    # id_local = id_local[:1000].astype(int)
+    # A_V_local = A_V_local[:1000]
 
     for idx in tqdm(range(len(id_local)), desc="Processing galaxies", disable=(rank != 0)):
 
